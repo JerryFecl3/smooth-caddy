@@ -9,6 +9,10 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +34,12 @@ jobs:
         run: python -m unittest discover -s tests
       - name: Build tagged release
         run: python tools/build_release.py
+      - name: Attest release packages
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
       - uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ matrix.os }}

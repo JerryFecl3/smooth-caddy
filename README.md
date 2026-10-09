@@ -131,6 +131,16 @@ P12 与信任 CA 固定导出到与 data 同级的 export 目录，界面显示�
 
 发布工作流位于 `.github/workflows/release.yml`。两个平台均通过测试和构建后才发布资产；实际验收结果以相应标签的 Actions 结果为准。
 
+GitHub 构建在上传前为最终压缩包生成构建来源证明（Attestation）。通过 Actions 的 OIDC 身份自动签名，无须维护签名私钥或新增仓库 Secret；证明失败会阻止发布。此机制不属于 Windows 代码签名。
+
+下载发布压缩包后，可用 GitHub CLI 联网验证其来源：
+
+```bash
+gh attestation verify <下载的压缩包路径> --repo JerryFecl3/smooth-caddy
+```
+
+验证对象是原始压缩包，SHA-256 校验文件仍然保留。来源证明仅适用于启用此流程后由 GitHub Actions 构建的发布物；现有旧包和本地构建不会自动获得证明。详见 [GitHub 构建来源证明文档](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations)。
+
 ## 构建发布物
 
 在对应目标平台的原生 Python 环境中执行。要求工作区干净，当前提交具有唯一的 `vX.Y.Z` 标签：
