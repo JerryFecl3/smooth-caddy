@@ -68,7 +68,7 @@ def main():
     shutil.copy2(python_license, licenses / 'PYTHON-LICENSE.txt')
     # On Debian, collect copyright files for system libraries present in Analysis.
     missing = []
-    toc = ast.literal_eval((work / 'smooth-caddy' / 'Analysis-00.toc').read_text())
+    toc = ast.literal_eval((work / 'smooth-caddy' / 'Analysis-00.toc').read_text(encoding='utf-8'))
     def walk(value):
         if isinstance(value, (tuple, list)):
             if len(value) == 3 and value[-1] in ('BINARY', 'EXTENSION') and isinstance(value[1], str):
