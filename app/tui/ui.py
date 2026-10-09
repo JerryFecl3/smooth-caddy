@@ -565,7 +565,7 @@ class Terminal(App, inherit_bindings=False):
             elif required:self.exit()
         self.push_screen(Form('创建 CA' if required else '初始化 CA',
             [Field('name', 'CA 名称前缀', placeholder='例如：Personal WEB')], validate,
-            '根 CA 是此网络的信任基础，请妥善保管口令及 data 目录。\n'
+            '根 CA 是此网络的信任基础，请妥善保管口令及 数据目录。\n'
             '名称仅支持英文字母、数字、空格及 - _ .。'), done)
 
     @unlocked_operation

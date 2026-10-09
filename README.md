@@ -21,7 +21,7 @@ python3 -m venv .venv
 .venv/bin/python smooth_caddy.py
 ```
 
-默认数据目录是项目目录下的 `data/`，不随启动时的工作目录改变。可指定其他位置：
+Linux 和 Windows 默认数据目录均为当前用户主目录下的 `~/.smooth-caddy/`，数据库直接保存在其中，不再嵌套 `data/`。默认路径不随程序位置或启动时的工作目录改变。可指定其他位置：
 
 ```bash
 .venv/bin/python smooth_caddy.py --data-dir /path/to/data
@@ -86,14 +86,15 @@ SSH 固定使用 root、22 端口，沿节点上游关系跳转。通过“SSH �
 | `tool_caddy/` | Caddy 二进制缓存 |
 | `tool_lego/lego` | 本机申请公共证书使用的 lego 工具 |
 | `releases/` | 配置批次、索引、元数据及文件哈希 |
-| `.tmp/` | SSH 部署临时包 |
-| `../export/packages/` | 导出的离线部署包 |
+| `.tmp/` | 下载、解压、部署和导出等临时文件 |
 
-P12 与信任 CA 固定导出到与 data 同级的 export 目录，界面显示完整路径。信任 CA 是根证书的 DER `.cer`，不含私钥；P12 包含用户证书、私钥和证书链，使用独立导出口令。
+P12 与信任 CA 固定导出到 `~/smooth-caddy-export/`，离线部署包导出到其 `packages/` 子目录；使用 `--data-dir` 不改变导出位置。导出目录在导出时创建，界面显示完整路径。Windows 对应用户目录下的 `.smooth-caddy` 与 `smooth-caddy-export` 文件夹，不位于 Documents 内。信任 CA 是根证书的 DER `.cer`，不含私钥；P12 包含用户证书、私钥和证书链，使用独立导出口令。
 
 持久私钥、DNS 凭据和 ACME 私密状态由同一个程序口令加密。验证后解锁至进程退出，配置本身不加密；修改配置也需解锁。重置 SSH 私钥、重新初始化 CA 另需危险确认和再次验证口令。
 
 配置批次材料加密保存，读取需要程序解锁。手动导出的部署包使用独立导出口令，目标机需有 `openssl` 命令并交互输入口令。SSH 部署临时包和目标机运行材料仍含明文私钥。
+
+旧版本升级后需在退出程序的情况下，将旧 `data/` 内的全部内容（包括隐藏文件）复制到 `~/.smooth-caddy/`，不要复制成 `~/.smooth-caddy/data/`；也可通过 `--data-dir` 继续使用原目录。旧 `export/` 中需保留的文件可另行复制到 `~/smooth-caddy-export/`。程序不自动迁移旧目录。
 
 搬迁或备份前退出程序，复制整个数据目录；源码运行时还需在新环境重建虚拟环境，不建议直接复制 `.venv/`。索引与清单采用相对路径，数据目录可整体迁移。
 
@@ -153,7 +154,7 @@ gh attestation verify <下载的压缩包路径> --repo JerryFecl3/smooth-caddy
 
 输出位于 `dist/`，命名为 `smooth-caddy-<版本>-<系统>-<架构>`。Linux 生成 `.tar.gz`，Windows 生成 `.zip`；压缩包含单文件程序、说明、许可证目录和 `build-info.json`，旁边提供 SHA-256 校验文件。Linux 和 Windows 的 x64 构建在 GitHub Actions 分别测试；ARM 不在本阶段发布范围。
 
-解压到可写目录后启动程序，默认数据位于可执行文件旁的 `data/`，不是当前工作目录或临时解压目录。退出后替换程序进行升级，保留数据目录；数据格式变更遵循前述兼容与迁移规则。
+解压后启动程序，默认数据位于当前用户主目录下的 `~/.smooth-caddy/`，与源码运行一致。退出后替换程序进行升级，保留数据目录；数据格式变更遵循前述兼容与迁移规则。
 
 构建机的 Python、架构、libc 和依赖版本会写入 `build-info.json`。GitHub 发布使用 Ubuntu 22.04（glibc 2.35）构建 Linux 包，不保证更旧的 glibc 系统可运行。许可证收集包含构建环境包及可识别的系统库声明，是保守收集，不等于完成全部依赖授权审核。详见 [第三方声明](THIRD_PARTY_NOTICES.md)。
 

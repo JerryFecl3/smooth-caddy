@@ -10,6 +10,7 @@ class CombinedDeploymentTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.app=Application(self.tmp.name);self.addCleanup(self.app.close)
+        self.app.store.exports=Path(self.tmp.name)/"export"
         self.app.security.setup('secret');self.app.certificates.initialize('Network')
         for name in ('A','B'):self.app.create('nodes',name)
         cfg=self.app.snapshot()

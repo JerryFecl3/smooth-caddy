@@ -1,5 +1,6 @@
 from app.network.deployment import deployment_update
 import tempfile, unittest, threading
+from pathlib import Path
 from unittest.mock import patch, AsyncMock
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -12,6 +13,7 @@ class PublicBatchTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.app=Application(self.tmp.name);self.addCleanup(self.app.close)
+        self.app.store.exports=Path(self.tmp.name)/"export"
         self.app.security.setup('secret');self.app.certificates.initialize('Network')
         self.app.create('regions','LAN');self.app.create('nodes','Router');self.app.create('sites','Web')
         c=self.app.snapshot();r=c.regions[0];n=c.nodes[0];s=c.sites[0]

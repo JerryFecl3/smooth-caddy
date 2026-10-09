@@ -13,15 +13,15 @@ class EntryTests(unittest.TestCase):
     def test_data_directory_forwarded(self):
         with tempfile.TemporaryDirectory() as directory,patch('app.tui.ui.main') as run:
             main(['--data-dir',directory]);run.assert_called_once_with(directory)
-    def test_default_directory_is_project_relative(self):
+    def test_default_directory_is_user_home_relative(self):
         with patch('app.tui.ui.main') as run:
             main([])
-            self.assertEqual(Path(run.call_args.args[0]),Path(__file__).resolve().parents[1]/'data')
-    def test_frozen_data_belongs_to_executable_not_extracted_resources(self):
+            self.assertEqual(Path(run.call_args.args[0]),Path.home()/'.smooth-caddy')
+    def test_frozen_data_uses_home_not_executable(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
-            with patch.object(sys, 'frozen', True, create=True), patch.object(sys, 'executable', str(base/'smooth-caddy')):
-                self.assertEqual(default_data_directory(), base/'data')
+            with patch.object(sys, 'frozen', True, create=True), patch.object(sys, 'executable', str(base/'bin'/'smooth-caddy')), patch('pathlib.Path.home', return_value=base):
+                self.assertEqual(default_data_directory(), base/'.smooth-caddy')
 
     def test_root_and_module_help(self):
         for args in (['smooth_caddy.py'],['-m','app']):

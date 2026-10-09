@@ -23,11 +23,13 @@ class RuntimeTests(unittest.TestCase):
             again=Runtime(data);again.ready.result();again.close()
 
     def test_paths_and_failed_publish(self):
-        with tempfile.TemporaryDirectory() as root:
-            app=Application(Path(root)/'data')
+        with tempfile.TemporaryDirectory() as root, patch('pathlib.Path.home') as home:
+            home.return_value = Path(root)
+            app=Application(Path(root)/'custom-data')
             try:
                 self.assertEqual(app.store.path.name,'smooth-caddy.db')
-                self.assertEqual(app.store.exports,Path(root).resolve()/'export')
+                self.assertFalse(app.store.exports.exists())
+                self.assertEqual(app.store.exports,Path(root)/'smooth-caddy-export')
                 self.assertEqual(app.releases.cache.root,app.store.directory/'tool_caddy')
                 target=app.store.exports/'test.cer'
                 publish(target,b'old',app.store.temporary)

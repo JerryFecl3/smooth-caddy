@@ -5,7 +5,7 @@
 - `smooth_caddy.py`: main local entry script.
 - `app/`: application package.
 - `tests/`: unittest test suite.
-- `data/`: local runtime data directory; ignored by git.
+- `~/.smooth-caddy/`: default runtime data directory (outside the repository).
 - `.venv/`: local Python virtual environment; ignored by git.
 
 ## Environment
@@ -27,8 +27,9 @@ script is still the preferred local entry point.
 .venv/bin/python smooth_caddy.py
 ```
 
-The default data directory is `data`, which stores the database at
-`data/smooth-caddy.db`.
+The default data directory is `~/.smooth-caddy/` on Linux and Windows, which stores
+the database directly at `~/.smooth-caddy/smooth-caddy.db`. Exports always use
+`~/smooth-caddy-export/`, including when `--data-dir` is specified.
 
 ## Test
 
@@ -41,7 +42,7 @@ The default data directory is `data`, which stores the database at
 
 - Keep `smooth_caddy.py` in the repository root as the human-facing main program.
 - Keep application modules under `app/`; do not reintroduce `src/`.
-- Do not create nested project-name directories such as `data/smooth-caddy/`.
+- Do not add an extra data directory level such as `~/.smooth-caddy/data/`.
 - Use `app/` imports inside tests and implementation.
 - Prefer small, focused edits and keep CLI behavior covered by `tests/test_app.py`.
 - Treat `README.md` as the documentation entry point.

@@ -17,7 +17,7 @@ class Store:
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.temporary = self.directory / '.tmp'
         self.temporary.mkdir(exist_ok=True, mode=0o700)
-        self.exports = self.directory.parent / 'export'
+        self.exports = Path.home() / 'smooth-caddy-export'
         self.path = self.directory / 'smooth-caddy.db'
         existed = self.path.exists()
         if not existed:

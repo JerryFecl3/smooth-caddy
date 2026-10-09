@@ -102,8 +102,8 @@ def main():
     (stage / 'build-info.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
     (stage / 'README.txt').write_text(
         'Smooth Caddy\n\n'
-        'Run smooth-caddy (Windows: smooth-caddy.exe) in a writable directory.\n'
-        'Data is created beside the executable in data/. --data-dir overrides it.\n'
+        'Run smooth-caddy (Windows: smooth-caddy.exe).\n'
+        'Data is created in ~/.smooth-caddy/. --data-dir overrides it. Exports always go to ~/smooth-caddy-export/.\n'
         'Exit before copying data or replacing the executable.\n'
         'Caddy and lego are downloaded separately through the application.\n'
         'See README.md in the source repository for usage and platform requirements.\n'

@@ -213,7 +213,7 @@ class InitializationDialog(Form):
             Field('name', '初始化根CA名称', placeholder='例如：Personal WEB'),
         ], validate, '使用本软件前，必须设置一个口令。\n'
            '本程序将生成SSH密钥及根CA私钥，私钥均将受到以上口令保护。\n'
-           '请妥善保管本程序的口令及data目录。')
+           '请妥善保管本程序的口令及数据目录。')
 
     def compose_actions(self):
         yield Button('退出 · Esc', id='cancel')
