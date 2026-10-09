@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smooth-caddy"
+dynamic = ["version"]
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+description = "Small Caddy configuration and certificate manager for personal networks."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "cryptography>=42.0",
+    "asyncssh>=2.14",
+    "textual==8.2.7",
+]
+
+[project.scripts]
+smooth-caddy = "app.entry:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+"app.tui" = ["*.tcss"]
+"app.network" = ["templates/*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "app.version.__version__"}

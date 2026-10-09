@@ -1,0 +1,141 @@
+$focus-blue: #0078d4;
+$emphasis: #24544d;
+Screen { background: #10151e; color: #d9e2ee; }
+#brand { height: 3; padding: 1 2; text-style: bold; background: $emphasis; color: #e6f4ef; }
+#workspace { height: 1fr; }
+#sidebar { width: 20; background: #141d2b; border-right: solid #29354a; padding: 1; }
+#nav { height: auto; background: transparent; }
+ListItem { height: 3; padding: 1 1 0 1; }
+ListItem.active-page { background: $emphasis; color: #90d7d1; text-style: bold; }
+#nav:focus > ListItem.-highlight { background: $focus-blue; }
+#main { width: 1fr; padding: 1 2 0 2; }
+#matrix { height: 1fr; background: #10151e; border: solid #28364b; }
+#matrix:focus { border: solid #5c9fa8; }
+DataTable > .datatable--header { background: #233149; color: #c8d9ed; text-style: bold; }
+DataTable > .datatable--cursor { background: $focus-blue; color: #ffffff; text-style: bold; }
+DataTable > .datatable--header-cursor { background: $focus-blue; color: #ffffff; }
+DataTable > .datatable--fixed { background: transparent; }
+#actions { height: 4; margin: 1 0; overflow-x: auto; overflow-y: hidden; }
+Button { width: auto; min-width: 16; margin-right: 1; text-align: center; content-align: center middle; }
+.invalid { color: #ffb4a2 !important; }
+#ca-panel { height: 1fr; padding: 1 2; border: solid #28364b; }
+Form, PasswordDialog, Export { align: center middle; background: #000000 65%; }
+#dialog { width: 72; max-width: 95%; height: auto; max-height: 95%; padding: 1 2; border: thick #507c93; background: #182335; }
+#dialog-title { height: auto; min-height: 2; text-style: bold; color: #d8f5f0; }
+#dialog-note { height: auto; margin-bottom: 1; color: #a7b8ce; }
+#form-fields { height: auto; max-height: 24; }
+#form-fields Label { margin-top: 1; color: #c1d0e3; }
+#form-fields Input, #form-fields Select { margin-bottom: 0; }
+#form-fields Checkbox { margin-top: 1; }
+#form-error { height: auto; min-height: 1; color: #ffb4a2; }
+.dialog-actions { height: 3; align-horizontal: right; margin-top: 1; }
+
+.port-row { height: 3; margin-top: 1; }
+#form-fields .port-row Checkbox { width: 1fr; margin: 0; }
+#form-fields .port-row Input { width: 12; }
+#ca-info { height: auto; }
+#ssh-info { height: auto; margin-top: 1; color: #a9c8f2; }
+Checkbox > .toggle--button { color: #c4d0df; background: #233149; text-style: bold; }
+Checkbox.-on > .toggle--button { color: #10151e; background: #99dbd4; text-style: bold; }
+Checkbox:focus { background: #345372; }
+Checkbox:focus > .toggle--label { text-style: bold underline; }
+
+
+#sidebar Button { width: 100%; margin-top: 1; margin-right: 0; }
+#nav-note { height: 1fr; margin-top: 0; }
+
+Button.-primary {
+    background: $emphasis;
+    color: #e6f4ef;
+    border-top: blank $emphasis;
+    border-bottom: blank $emphasis;
+    text-style: bold;
+}
+Button.-primary:hover { background: $emphasis; border-top: blank $emphasis; }
+Button:focus, Button:focus:hover, Button.-primary:focus, Button.-error:focus {
+    background: $focus-blue;
+    color: #ffffff;
+    border-top: blank $focus-blue;
+    border-bottom: blank $focus-blue;
+    background-tint: transparent;
+    tint: transparent;
+    text-style: bold;
+}
+
+
+#nav ListItem.config-error, #nav ListItem.config-error Label { color: #ff6b6b; }
+
+.action-spacer { width: 1fr; height: 1; min-width: 1; }
+
+#job-status { height: auto; max-height: 20; overflow-y: auto; margin-top: 1; }
+
+Export #versions {
+    width: 100%;
+    margin: 0;
+    border: solid #345372;
+    scrollbar-gutter: stable;
+    overflow-y: scroll;
+}
+Export .dialog-actions Button:last-child { margin-right: 0; }
+
+Export #version-refresh { width: 100%; height: 1; color: #a7b8ce; padding: 0 1; }
+
+/* Fixed-column and ordinary cursors must retain the same color on blur. */
+DataTable > .datatable--cursor,
+DataTable:focus > .datatable--cursor,
+DataTable > .datatable--fixed-cursor,
+DataTable:focus > .datatable--fixed-cursor {
+    background: $focus-blue;
+    color: #ffffff;
+    text-style: bold;
+}
+DataTable > .datatable--active-row {
+    background: #90c2e8;
+    color: #10263a;
+}
+
+DataTable > .datatable--header,
+DataTable:focus > .datatable--header,
+DataTable > .datatable--header-hover {
+    background: #233149;
+    background-tint: transparent;
+    color: #c8d9ed;
+    text-style: bold;
+}
+
+.ssh-guide-dialog #dialog { width: 96; }
+#public-key-scroll { height: auto; max-height: 3; overflow-x: auto; overflow-y: hidden; }
+#public-key { width: auto; height: 1; }
+
+
+TaskProgress { align: center middle; background: #000000 65%; }
+#task-dialog { width: 88; max-width: 95%; height: auto; max-height: 95%; padding: 1 2; border: thick #507c93; background: #182335; }
+#task-overall, #task-current { width: 100%; margin: 1 0; }
+#task-steps { height: auto; max-height: 60vh; margin-bottom: 1; }
+#task-step-list, #task-summary, #task-bytes, #task-elapsed { height: auto; }
+#task-detail { height: auto; max-height: 8; overflow-y: auto; }
+.task-error { color: #ff6b6b; }
+
+#task-summary-row { height: auto; min-height: 1; }
+#task-summary-row #task-summary { width: 1fr; }
+#task-summary-row #task-elapsed { width: 19; text-align: right; }
+
+#task-overall Bar, #task-current Bar { width: 1fr; }
+
+
+* {
+    scrollbar-color: #68717d;
+    scrollbar-color-hover: #87909c;
+    scrollbar-color-active: #a1a8b1;
+    scrollbar-background: #202630;
+    scrollbar-background-hover: #202630;
+    scrollbar-background-active: #202630;
+}
+
+
+CertificateDetails #dialog { width: 88; }
+LegoManager #dialog { width: 80; }
+
+HelpGuide #dialog { width: 90; height: 80%; max-height: 36; overflow-y: hidden; }
+HelpGuide #guide-scroll { height: 1fr; min-height: 0; }
+HelpGuide #form-fields, HelpGuide #form-error { display: none; }

@@ -1,0 +1,3 @@
+cryptography>=42.0
+asyncssh>=2.14
+textual==8.2.7
