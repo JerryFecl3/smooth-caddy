@@ -86,7 +86,7 @@ class BinaryCache:
     def get(self,version,arch):
         path=self.path(version,arch)
         data=path.read_bytes()
-        if sha(data)!=path.with_name('sha256').read_text().strip(): raise ValueError('本地 Caddy 缓存校验失败')
+        if sha(data)!=path.with_name('sha256').read_text(encoding='utf-8').strip(): raise ValueError('本地 Caddy 缓存校验失败')
         return data
 
     def ensure(self,version,arch,progress=lambda _:None,*,cancel=None):
@@ -147,7 +147,7 @@ def build_package(node, version, caddy, materials, binary=None):
     manifest=(f'format=1\nnode_id={node.id}\nplatform={platform}\nrelease={version}\ncaddy_version={caddy}\narch={node.arch}\nbinary_sha256={sha(binary) if binary else ""}\n').encode()
     files={'release/'+name:data for name,data in materials.items()}
     files['release/manifest']=manifest
-    files['manage.sh']=HERE.joinpath('manage.sh').read_text().replace('@PLATFORM@',platform).encode()
+    files['manage.sh']=HERE.joinpath('manage.sh').read_text(encoding='utf-8').replace('@PLATFORM@',platform).encode()
     files['service']=HERE.joinpath('smooth-caddy.service' if platform=='debian' else 'procd-service.sh').read_bytes()
     if binary is not None:
         files['caddy']=binary
@@ -161,7 +161,7 @@ def build_package(node, version, caddy, materials, binary=None):
             entry=tarfile.TarInfo(name);entry.size=len(data);entry.mode=0o600
             archive.addfile(entry,io.BytesIO(data))
     payload=buf.getvalue()
-    return HERE.joinpath('header.sh').read_text().replace('@PAYLOAD_HASH@',sha(payload)).encode()+payload
+    return HERE.joinpath('header.sh').read_text(encoding='utf-8').replace('@PAYLOAD_HASH@',sha(payload)).encode()+payload
 
 
 class Releases:
@@ -190,7 +190,7 @@ class Releases:
     def list(self):
         path=self.root/'index.json'
         if not path.exists():return []
-        value=json.loads(path.read_text())
+        value=json.loads(path.read_text(encoding='utf-8'))
         if value['format']!=3:raise ValueError('配置批次索引格式不受支持')
         result=[Release(**entry) for entry in value['releases']]
         for batch in result:self.directory(batch)

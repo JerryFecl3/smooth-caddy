@@ -27,7 +27,7 @@ class RuntimeTests(unittest.TestCase):
             app=Application(Path(root)/'data')
             try:
                 self.assertEqual(app.store.path.name,'smooth-caddy.db')
-                self.assertEqual(app.store.exports,Path(root)/'export')
+                self.assertEqual(app.store.exports,Path(root).resolve()/'export')
                 self.assertEqual(app.releases.cache.root,app.store.directory/'tool_caddy')
                 target=app.store.exports/'test.cer'
                 publish(target,b'old',app.store.temporary)

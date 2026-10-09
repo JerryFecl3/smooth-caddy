@@ -1,17 +1,15 @@
 import tempfile
 import unittest
 from types import SimpleNamespace
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, closing
 from unittest.mock import patch
 from app.network.application import Application
 from app.network.releases import PackageSet, Package
 
 class DeploymentTests(unittest.IsolatedAsyncioTestCase):
     async def test_all_uploads_before_installs_retry_skip_and_stop(self):
-        with tempfile.TemporaryDirectory() as directory:
-            app=Application(directory)
+        with tempfile.TemporaryDirectory() as directory, closing(Application(directory)) as app:
             app.security.setup('secret')
-            self.addCleanup(app.close)
             ids=[app.create('nodes',x) for x in ('one','two','three')]
             cfg=app.snapshot()
             for i,n in enumerate(cfg.nodes):n.ssh_ip='127.0.0.'+str(i+1)
@@ -58,8 +56,7 @@ class DeploymentTests(unittest.IsolatedAsyncioTestCase):
             finally:app.close()
 
     async def test_uncertain_install_queries_without_reinstalling(self):
-        with tempfile.TemporaryDirectory() as directory:
-            app=Application(directory);self.addCleanup(app.close)
+        with tempfile.TemporaryDirectory() as directory, closing(Application(directory)) as app:
             app.security.setup('secret')
             identity=app.create('nodes','node')
             cfg=app.snapshot();cfg.nodes[0].ssh_ip='127.0.0.1';app.save_configuration(cfg)

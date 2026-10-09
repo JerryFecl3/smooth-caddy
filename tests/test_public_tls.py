@@ -110,7 +110,7 @@ class PublicTLSTests(unittest.TestCase):
         self.assertEqual(self.service.get(identity)['certificate'],'')
     def test_tool_uses_flat_executable_path(self):
         tool=self.service.tool
-        self.assertEqual(tool.binary,Path(self.tmp.name)/'tool_lego'/('lego.exe' if os.name=='nt' else 'lego'))
+        self.assertEqual(tool.binary,Path(self.tmp.name).resolve()/'tool_lego'/('lego.exe' if os.name=='nt' else 'lego'))
         tool.root.mkdir(parents=True)
         tool.binary.write_text('#!/bin/sh\necho lego version 5.1.0\n')
         tool.binary.chmod(0o700)

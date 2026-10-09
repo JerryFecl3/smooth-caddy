@@ -8,6 +8,10 @@ def default_data_directory():
     return base / "data"
 
 def main(argv=None):
+    # Redirected Windows streams otherwise inherit an ANSI code page.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description='个人网络 Caddy 配置与证书管理')
     parser.add_argument('--data-dir', default=str(default_data_directory()), help='运行数据目录，默认 data（数据库 smooth-caddy.db）')
     from .version import display_version

@@ -211,7 +211,7 @@ class TerminalTests(unittest.IsolatedAsyncioTestCase):
                     await pilot.pause()
                     field=ui.screen.query_one('#path',Static)
                     self.assertFalse(field.can_focus)
-                    self.assertEqual(str(field.render()),str(Path(directory)/'export'/'Phone.p12'))
+                    self.assertEqual(str(field.render()),str(Path(directory).resolve()/'export'/'Phone.p12'))
                     self.assertFalse(ui.screen.query('#visible'))
                     self.assertTrue(all(not field.password for field in ui.screen.query(Input)))
                     ui.screen.query_one('#password',Input).value='export'

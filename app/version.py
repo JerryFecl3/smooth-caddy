@@ -21,7 +21,7 @@ def git_release(root=ROOT, tag=None):
 
 def display_version():
     embedded=Path(__file__).with_name('build-version.json')
-    if embedded.exists():return json.loads(embedded.read_text())['version']
+    if embedded.exists():return json.loads(embedded.read_text(encoding='utf-8'))['version']
     try:return git_release()['version']
     except (ValueError,OSError,subprocess.CalledProcessError):return 'development'
 

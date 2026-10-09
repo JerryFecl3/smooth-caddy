@@ -63,7 +63,7 @@ class TaskLayoutTests(unittest.IsolatedAsyncioTestCase):
                         self.assertIn('1 / 2',panel.query_one('#task-summary',Static).render().plain)
                         self.assertTrue(all(cell_len(line)<=content.size.width for line in text.splitlines()))
                         self.assertGreater(panel.query_one('#task-stop').region.height,0)
-                        ui.save_screenshot(f'task-progress-{size[0]}.svg',path='/tmp')
+                        ui.save_screenshot(f'task-progress-{size[0]}.svg',path=directory)
                         # A single group keeps the exact same row style without its header.
                         panel.task_state=TaskState();panel.steps=()
                         panel.show_step(TaskStep(('a.example.com','b.example.com'),1,'申请中',('申请公共TLS证书',)*2,'running'))

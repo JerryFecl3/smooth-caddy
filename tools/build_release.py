@@ -34,7 +34,7 @@ def main():
     work.mkdir(parents=True); stage.mkdir(parents=True)
     version_file=work/'build-version.json'
     version_file.write_text(json.dumps(release),encoding='utf-8')
-    cmd = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onefile',
+    cmd = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onefile', '--python-option', 'X utf8',
            '--name', 'smooth-caddy', '--distpath', str(stage), '--workpath', str(work),
            '--specpath', str(work), '--collect-all', 'textual',
            '--add-data', f'{version_file}{os.pathsep}app',
