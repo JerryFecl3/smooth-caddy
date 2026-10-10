@@ -63,6 +63,7 @@
 ## 证书体系
 
 唯一私有根 CA，三个中间 CA：站点 TLS、用户 Client、中继。
+所有新生成的私有 CA、Client、网站及中继证书保留现有 CN，并固定加入主体字段 `OU = Smooth Caddy`，用于标示生成程序，不参与授权、不提供编辑。已有证书不自动重签；公共 CA 签发的证书不修改。
 站点用户入口可选择私有 CA 或公共 CA；用户 mTLS 与中继身份仍使用私有 CA。公共 CA 由独立 lego 模块管理，详见公共 TLS 章节。
 私有证书与密钥的生成、签发、加密、改密和 PEM／P12 编解码通过 Python `cryptography` 库在进程内完成，不调用 `openssl`；公共 TLS 证书申请通过 lego 完成。
 CA 初始化输入名称前缀（示例 Personal WEB），四个 CN 强制追加 Root CA、TLS CA、mTLS CA、Relay CA。名称保存与证书 CN 一致；既有证书保持原名，不自动重签。程序口令独立于 CA 初始化。

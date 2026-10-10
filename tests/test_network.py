@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from cryptography import x509
+from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives.serialization import pkcs12
 from app.network.application import Application
 from app.network.models import Listen
@@ -64,6 +65,18 @@ class ApplicationTests(unittest.TestCase):
         leaf=ca.leaf('tls','example.test',dns='example.test')
         parsed=x509.load_pem_x509_certificate(leaf.certificate)
         self.assertEqual(parsed.extensions.get_extension_for_class(x509.SubjectAlternativeName).value.get_values_for_type(x509.DNSName),['example.test'])
+        certificates = [(cert, 'Phone'), (parsed, 'example.test')]
+        for role, name in ca.names.items():
+            certificates.append((x509.load_pem_x509_certificate(ca.public(role)), name))
+        for client_role in (False, True):
+            relay = ca.leaf('relay', 'Relay', client=client_role)
+            certificates.append((x509.load_pem_x509_certificate(relay.certificate), 'Relay'))
+        for certificate, name in certificates:
+            with self.subTest(name=name):
+                self.assertEqual(certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value, name)
+                self.assertEqual([a.value for a in certificate.subject.get_attributes_for_oid(NameOID.ORGANIZATIONAL_UNIT_NAME)], ['Smooth Caddy'])
+        cert.verify_directly_issued_by(chain[0])
+        chain[0].verify_directly_issued_by(chain[1])
         ca.reset();self.assertEqual(ca.clients(),[]);self.assertFalse(ca.initialized)
         self.assertEqual(config,self.app.snapshot())
 

@@ -45,7 +45,8 @@ def issue(name, key, issuer_cert=None, issuer_key=None, *, ca=False, root=False,
     if until <= now: raise ValueError('证书有效期已经结束')
     if issuer_cert is not None and until > issuer_cert.not_valid_after_utc:
         raise ValueError('签发有效期超出 CA 有效期')
-    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name),
+                         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, 'Smooth Caddy')])
     issuer_key = issuer_key or key
     builder = (x509.CertificateBuilder().subject_name(subject)
                .issuer_name(issuer_cert.subject if issuer_cert else subject)
