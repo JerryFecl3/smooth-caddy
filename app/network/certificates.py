@@ -1,4 +1,5 @@
 """Private PKI entirely through cryptography APIs; no subprocesses."""
+from ..i18n import tr
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from ipaddress import ip_address
@@ -17,10 +18,10 @@ CA_SUFFIXES = {'root': 'Root CA', 'tls': 'TLS CA', 'client': 'mTLS CA', 'relay':
 
 def validate_certificate_name(name):
     name = name.strip()
-    if not name: raise ValueError('名称不能为空')
+    if not name: raise ValueError(tr('名称不能为空'))
     if not re.fullmatch(r'[A-Za-z0-9 ._-]+', name):
-        raise ValueError('仅允许英文字母、数字、空格及 - _ .')
-    if len(name.encode('ascii')) > 64: raise ValueError('名称不能超过 64 个字符')
+        raise ValueError(tr('仅允许英文字母、数字、空格及 - _ .'))
+    if len(name.encode('ascii')) > 64: raise ValueError(tr('名称不能超过 64 个字符'))
     return name
 
 @dataclass(frozen=True)
@@ -42,9 +43,9 @@ def key_bytes(key, password=None):
 
 def issue(name, key, issuer_cert=None, issuer_key=None, *, ca=False, root=False, usages=(), sans=(), until=END):
     now = datetime.now(timezone.utc)
-    if until <= now: raise ValueError('证书有效期已经结束')
+    if until <= now: raise ValueError(tr('证书有效期已经结束'))
     if issuer_cert is not None and until > issuer_cert.not_valid_after_utc:
-        raise ValueError('签发有效期超出 CA 有效期')
+        raise ValueError(tr('签发有效期超出 CA 有效期'))
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name),
                          x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, 'Smooth Caddy')])
     issuer_key = issuer_key or key
@@ -97,7 +98,7 @@ class Certificates:
 
     def public(self, role):
         row = self.store.db.execute('SELECT cert FROM authorities WHERE role=?', (role,)).fetchone()
-        if row is None: raise ValueError('CA 尚未初始化')
+        if row is None: raise ValueError(tr('CA 尚未初始化'))
         return row[0]
 
     def export_trust_ca(self):
@@ -107,11 +108,11 @@ class Certificates:
     def initialize(self, name, *, replace=False):
         self.security.require()
         name = validate_certificate_name(name)
-        if self.initialized and not replace: raise ValueError('CA 已初始化；重新初始化需要明确确认')
+        if self.initialized and not replace: raise ValueError(tr('CA 已初始化；重新初始化需要明确确认'))
         keyset = {r: ec.generate_private_key(ec.SECP256R1()) for r in ROLES}
         names = {role: name+' '+CA_SUFFIXES[role] for role in ROLES}
         if any(len(value.encode('utf-8')) > 64 for value in names.values()):
-            raise ValueError('CA 名称过长，请缩短名称前缀')
+            raise ValueError(tr('CA 名称过长，请缩短名称前缀'))
         root = issue(names['root'], keyset['root'], ca=True, root=True)
         certs = {'root': root}
         for role, usage in [('tls', [ExtendedKeyUsageOID.SERVER_AUTH]),
@@ -134,7 +135,7 @@ class Certificates:
 
     def sign_client(self, name):
         name = validate_certificate_name(name)
-        if any(c.name.casefold() == name.casefold() for c in self.clients()): raise ValueError('Client 名称已存在')
+        if any(c.name.casefold() == name.casefold() for c in self.clients()): raise ValueError(tr('Client 名称已存在'))
         material = self.leaf('client', name, client=True, until=END)
         encrypted = self.security.encrypt(material.private_key)
         identity = uuid4().hex
@@ -145,16 +146,16 @@ class Certificates:
 
     def set_enabled(self, identity, enabled):
         self.security.require()
-        if type(enabled) is not bool: raise ValueError('启用状态必须为布尔值')
+        if type(enabled) is not bool: raise ValueError(tr('启用状态必须为布尔值'))
         with self.store.transaction():
             if self.store.db.execute('UPDATE clients SET enabled=? WHERE id=?', (enabled,identity)).rowcount != 1:
-                raise ValueError('Client 不存在')
+                raise ValueError(tr('Client 不存在'))
 
     def export_p12(self, identity, password):
         self.security.require()
-        if not password: raise ValueError('导出密码不能为空')
+        if not password: raise ValueError(tr('导出密码不能为空'))
         row = self.store.db.execute('SELECT name,cert,key FROM clients WHERE id=?', (identity,)).fetchone()
-        if row is None: raise ValueError('Client 不存在')
+        if row is None: raise ValueError(tr('Client 不存在'))
         name, cert, private = row
         return pkcs12.serialize_key_and_certificates(name.encode(),
                  serialization.load_pem_private_key(self.security.decrypt(private), None),
@@ -166,10 +167,10 @@ class Certificates:
         return [row[0] for row in self.store.db.execute('SELECT cert FROM clients WHERE enabled=1 ORDER BY id')]
 
     def leaf(self, role, name, *, client=False, dns=None, ip=None, until=None):
-        if role not in ('tls','client','relay'): raise ValueError('叶子用途无效')
+        if role not in ('tls','client','relay'): raise ValueError(tr('叶子用途无效'))
         self.security.require()
-        if not self.initialized: raise ValueError('CA 尚未初始化')
-        if role == 'tls' and client or role == 'client' and not client: raise ValueError('证书用途不匹配')
+        if not self.initialized: raise ValueError(tr('CA 尚未初始化'))
+        if role == 'tls' and client or role == 'client' and not client: raise ValueError(tr('证书用途不匹配'))
         key = ec.generate_private_key(ec.SECP256R1())
         sans = []
         if dns: sans.append(x509.DNSName(dns))

@@ -1,4 +1,5 @@
 """Shared public-certificate coverage and renewal policy."""
+from ..i18n import tr
 from datetime import datetime, timedelta, timezone
 from cryptography import x509
 
@@ -14,6 +15,6 @@ def certificate_expiry(pem):
 
 
 def renewal_status(pem, now=None):
-    if not pem:return '待申请'
+    if not pem:return tr('待申请')
     now = now or datetime.now(timezone.utc)
-    return '待续签' if certificate_expiry(pem) <= now+timedelta(days=RENEW_DAYS) else ''
+    return tr('待续签') if certificate_expiry(pem) <= now+timedelta(days=RENEW_DAYS) else ''

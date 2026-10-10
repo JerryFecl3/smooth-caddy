@@ -1,4 +1,5 @@
 """Process-wide passphrase session and authenticated private-key storage."""
+from ..i18n import tr
 import base64
 import os
 import threading
@@ -15,7 +16,7 @@ class LockedError(ValueError):
 
 def cipher(password, salt):
     if not isinstance(password, str) or not password:
-        raise ValueError('程序口令不能为空')
+        raise ValueError(tr('程序口令不能为空'))
     key = Scrypt(salt=salt, length=32, n=2**15, r=8, p=1).derive(password.encode())
     return Fernet(base64.urlsafe_b64encode(key))
 
@@ -39,10 +40,10 @@ class Security:
     def unlocked(self): return self._cipher is not None
 
     def require(self):
-        if not self.unlocked: raise LockedError('请先解锁程序')
+        if not self.unlocked: raise LockedError(tr('请先解锁程序'))
         if self._record('passphrase-verifier') != self._verifier:
             self.lock()
-            raise LockedError('程序口令已被其他进程修改，请重新解锁')
+            raise LockedError(tr('程序口令已被其他进程修改，请重新解锁'))
 
     def setup(self, password):
         with self._mutex:
@@ -54,30 +55,30 @@ class Security:
                        ('ssh-key', protector.encrypt(ssh.export_private_key())),
                        ('ssh-public', ssh.export_public_key()), ('batch-key', protector.encrypt(Fernet.generate_key()))]
             with self.store.transaction():
-                if self.initialized: raise ValueError('程序口令已设置')
+                if self.initialized: raise ValueError(tr('程序口令已设置'))
                 self.store.db.executemany('INSERT INTO secrets VALUES (?,?)', records)
             self._password, self._cipher, self._verifier = password, protector, verifier
 
     def unlock(self, password):
         with self._mutex:
-            if not self.initialized: raise ValueError('请先设置程序口令')
+            if not self.initialized: raise ValueError(tr('请先设置程序口令'))
             try:
                 protector = cipher(password, self._record('passphrase-salt'))
                 verifier = self._record('passphrase-verifier')
                 if protector.decrypt(verifier) != VERIFIER: raise InvalidToken()
-            except InvalidToken: raise ValueError('程序口令错误') from None
+            except InvalidToken: raise ValueError(tr('程序口令错误')) from None
             self._password, self._cipher, self._verifier = password, protector, verifier
 
     def verify_password(self, password):
         """Revalidate explicit input without changing the process unlock session."""
         with self._mutex:
-            if not self.initialized: raise ValueError('请先设置程序口令')
+            if not self.initialized: raise ValueError(tr('请先设置程序口令'))
             try:
                 protector = cipher(password, self._record('passphrase-salt'))
                 if protector.decrypt(self._record('passphrase-verifier')) != VERIFIER:
                     raise InvalidToken()
             except InvalidToken:
-                raise ValueError('程序口令错误') from None
+                raise ValueError(tr('程序口令错误')) from None
 
     def lock(self):
         self._password = self._cipher = self._verifier = None
@@ -91,12 +92,12 @@ class Security:
         with self._mutex:
             self.require()
             try: return self._cipher.decrypt(material)
-            except InvalidToken: raise ValueError('私钥数据损坏，无法解密') from None
+            except InvalidToken: raise ValueError(tr('私钥数据损坏，无法解密')) from None
 
     def batch_cipher(self):
         self.require()
         value=self._record('batch-key')
-        if value is None:raise ValueError('缺少批次加密密钥')
+        if value is None:raise ValueError(tr('缺少批次加密密钥'))
         return Fernet(self.decrypt(value))
 
     def change_password(self, password):

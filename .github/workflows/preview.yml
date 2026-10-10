@@ -1,0 +1,33 @@
+name: Windows Preview
+on:
+  push:
+    branches: ['preview/**']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Install build dependencies
+        run: python -m pip install -r requirements-build.txt
+      - name: Install project
+        run: python -m pip install -e .
+      - name: Test
+        run: python -m unittest discover -s tests
+      - name: Build preview
+        run: python tools/build_release.py --preview
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smooth-caddy-windows-amd64-preview
+          path: |
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 14

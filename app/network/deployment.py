@@ -1,4 +1,5 @@
 """SSH transport and sequential two-phase deployment with explicit decisions."""
+from ..i18n import tr
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -33,8 +34,8 @@ class DeploymentUpdate:
 
 
 def deployment_update(node_id, stage, status):
-    notes={'waiting':'未部署','uploading':'上传中','uploaded':'已上传','deploying':'部署中',
-           'checking':'确认部署结果','success':'部署成功','failed':'失败','skipped':'已跳过','uncertain':'结果待确认'}
+    notes={'waiting':tr('未部署'),'uploading':tr('上传中'),'uploaded':tr('已上传'),'deploying':tr('部署中'),
+           'checking':tr('确认部署结果'),'success':tr('部署成功'),'failed':tr('失败'),'skipped':tr('已跳过'),'uncertain':tr('结果待确认')}
     states={'uploaded':'success','success':'success','failed':'failed','skipped':'skipped','waiting':'pending'}
     return DeploymentUpdate(node_id,'deploy' if stage=='install' else stage,states.get(status,'running'),notes[status])
 
@@ -72,7 +73,7 @@ class SSH:
         return asyncssh.import_private_key(self.security.decrypt(self.store.db.execute("SELECT value FROM secrets WHERE name='ssh-key'").fetchone()[0]))
     def public(self):
         row=self.store.db.execute("SELECT value FROM secrets WHERE name='ssh-public'").fetchone()
-        return row[0].decode().strip() if row else '设置程序口令后生成 SSH 公钥'
+        return row[0].decode().strip() if row else tr('设置程序口令后生成 SSH 公钥')
     def trusted_count(self):return self.store.db.execute('SELECT count(*) FROM hosts').fetchone()[0]
 
     @asynccontextmanager
@@ -83,13 +84,13 @@ class SSH:
             tunnel=None
             for node in route:
                 key=await asyncio.wait_for(asyncssh.get_server_host_key(node.ssh_ip,22,tunnel=tunnel,config=None),30)
-                if key is None:raise ValueError('SSH 未提供主机密钥')
+                if key is None:raise ValueError(tr('SSH 未提供主机密钥'))
                 public=key.export_public_key()
                 row=self.store.db.execute('SELECT key FROM hosts WHERE node_id=?',(node.id,)).fetchone()
                 if row is None or row[0]!=public:
                     previous=asyncssh.import_public_key(row[0]).get_fingerprint() if row else None
                     identity=HostIdentity(node.id,node.name,node.ssh_ip,key.get_fingerprint(),previous)
-                    if not await confirm(identity):raise Stopped('未确认主机身份')
+                    if not await confirm(identity):raise Stopped(tr('未确认主机身份'))
                     with self.store.transaction():self.store.db.execute('INSERT OR REPLACE INTO hosts VALUES (?,?)',(node.id,public))
                 # Pin the just-approved key on the authenticated connection too.
                 conn=await asyncio.wait_for(asyncssh.connect(node.ssh_ip,22,username='root',tunnel=tunnel,
@@ -121,7 +122,7 @@ class Deployment:
                 while True:
                     notify(package.node_id,'uploading' if stage=='upload' else 'checking' if uncertain else 'deploying')
                     remote=f'/tmp/smooth-caddy-{package.node_id}-{release.version}.run'
-                    helper='/usr/local/lib/smooth-caddy/manage' if package.platform=='Debian 13' else '/usr/lib/smooth-caddy/manage'
+                    helper='/usr/local/lib/smooth-caddy/manage' if package.platform=='debian_13' else '/usr/lib/smooth-caddy/manage'
                     try:
                         async with self.app.ssh.connect(routes[package.node_id],confirm_host) as conn:
                             if stage=='upload':
@@ -129,7 +130,7 @@ class Deployment:
                                 # SCP protocol works with Dropbear without requiring an SFTP server.
                                 await asyncssh.scp(local,(conn,remote))
                                 result=await conn.run('sha256sum '+shlex.quote(remote),check=True)
-                                if result.stdout.split()[0]!=package.digest:raise ValueError('上传文件哈希不符')
+                                if result.stdout.split()[0]!=package.digest:raise ValueError(tr('上传文件哈希不符'))
                                 uploaded.add(package.node_id);statuses[package.node_id]='uploaded'
                             else:
                                 if uncertain:
@@ -137,20 +138,20 @@ class Deployment:
                                     if result.exit_status==0 and 'selected='+release.version in result.stdout and 'state=running' in result.stdout:
                                         statuses[package.node_id]='success';notify(package.node_id,'success');break
                                     # A query that cannot prove completion is a decision, not permission to rerun.
-                                    raise ValueError('部署结果未确认。请在节点检查后选择跳过或停止；不会自动重复部署')
+                                    raise ValueError(tr('部署结果未确认。请在节点检查后选择跳过或停止；不会自动重复部署'))
                                 result=await conn.run('sh '+shlex.quote(remote),check=False)
                                 if result.exit_status != 0:
-                                    message = f'部署退出码：{result.exit_status}'
-                                    for label, output in [('标准输出', result.stdout), ('标准错误', result.stderr)]:
+                                    message = tr('部署退出码：{0}', result.exit_status)
+                                    for label, output in [(tr('标准输出'), result.stdout), (tr('标准错误'), result.stderr)]:
                                         if output: message += '\n' + label + '：\n' + output[-2000:]
                                     command = ('journalctl -u smooth-caddy.service -n 20 --no-pager'
-                                               if package.platform == 'Debian 13'
+                                               if package.platform == 'debian_13'
                                                else "logread -e caddy | tail -n 20")
                                     try:
                                         diagnostics = await asyncio.wait_for(conn.run(command, check=False), 10)
-                                        if diagnostics.stdout: message += '\n服务日志：\n' + diagnostics.stdout[-5000:]
+                                        if diagnostics.stdout: message += tr('\n服务日志：\n') + diagnostics.stdout[-5000:]
                                     except Exception:
-                                        message += '\n无法读取服务日志'
+                                        message += tr('\n无法读取服务日志')
                                     raise ValueError(message)
                                 statuses[package.node_id]='success'
                             notify(package.node_id,statuses[package.node_id]);break
@@ -175,21 +176,21 @@ class Deployment:
         async with self.app.ssh.connect(ssh_route(config,node.id),confirm_host) as conn:
             result=await asyncio.wait_for(conn.run(
                 "if [ -e /etc/smooth-caddy/current ] || [ -L /etc/smooth-caddy/current ]; then cat /etc/smooth-caddy/current/manifest; else printf '__NOT_INSTALLED__'; fi",check=False),30)
-            if result.exit_status!=0:raise ValueError('读取节点部署信息失败：'+result.stderr)
+            if result.exit_status!=0:raise ValueError(tr('读取节点部署信息失败：')+result.stderr)
             installed=None
             if result.stdout.strip()!='__NOT_INSTALLED__':
                 fields=dict(line.split('=',1) for line in result.stdout.splitlines() if '=' in line)
                 declared=fields.get('caddy_version','');arch=fields.get('arch','')
                 if not re.fullmatch(r'v\d+\.\d+\.\d+',declared) or arch not in ARCHES:
-                    raise ValueError('节点部署信息无效')
-                directory='/usr/local/lib/smooth-caddy' if node.platform=='Debian 13' else '/usr/lib/smooth-caddy'
+                    raise ValueError(tr('节点部署信息无效'))
+                directory='/usr/local/lib/smooth-caddy' if node.platform=='debian_13' else '/usr/lib/smooth-caddy'
                 binary=f'{directory}/binaries/{declared}/{arch}/caddy'
                 command=f'if [ ! -e {shlex.quote(binary)} ]; then printf __NOT_INSTALLED__; else {shlex.quote(binary)} version; fi'
                 result=await asyncio.wait_for(conn.run(command,check=False),30)
-                if result.exit_status!=0:raise ValueError('查询 Caddy 版本失败：'+result.stderr)
+                if result.exit_status!=0:raise ValueError(tr('查询 Caddy 版本失败：')+result.stderr)
                 if result.stdout.strip()!='__NOT_INSTALLED__':
                     found=re.match(r'^(v\d+\.\d+\.\d+)(?:\s|$)',result.stdout.strip())
-                    if not found:raise ValueError('Caddy 返回了无法识别的版本')
+                    if not found:raise ValueError(tr('Caddy 返回了无法识别的版本'))
                     installed=found.group(1)
                 if arch!=node.arch:installed=None
         return installed
@@ -198,15 +199,15 @@ class Deployment:
         """Generate if requested, probe, assemble per-node binaries, deploy and clean."""
         from .task_progress import TaskCancelled
         self.app.security.require()
-        if not re.fullmatch(r'v\d+\.\d+\.\d+',version):raise ValueError('版本须为 vX.Y.Z')
+        if not re.fullmatch(r'v\d+\.\d+\.\d+',version):raise ValueError(tr('版本须为 vX.Y.Z'))
         config=self.app.releases.load(batch)[0] if batch else self.app.snapshot()
         nodes=config.nodes
-        if not nodes:raise ValueError('配置批次没有节点')
+        if not nodes:raise ValueError(tr('配置批次没有节点'))
         new=batch is None
         batch_plan=self.app.batches.plan(config) if new else None
         plan=batch_plan.tasks.join(deployment_plan(config)) if new else deployment_plan(config)
         def checkpoint():
-            if cancel.is_set():raise TaskCancelled('已停止后续工作')
+            if cancel.is_set():raise TaskCancelled(tr('已停止后续工作'))
         def step(i,status=''):
             checkpoint();task_progress(plan.event(i,status,'success' if status else ''))
         loop=asyncio.get_running_loop()
@@ -218,7 +219,7 @@ class Deployment:
                   lambda value:report(progress,value),task_progress=lambda update:report(task_progress,plan.map(update)),cancel=cancel,config=config,plan=batch_plan)
             on_batch(batch)
             captured=self.app.releases.load(batch)[0]
-            if captured.to_dict()!=config.to_dict():raise ValueError('生成时配置发生变化，请选择已生成的配置批次重新部署')
+            if captured.to_dict()!=config.to_dict():raise ValueError(tr('生成时配置发生变化，请选择已生成的配置批次重新部署'))
         else:on_batch(batch)
         include=set()
         for i,node in enumerate(nodes):
@@ -227,12 +228,12 @@ class Deployment:
                 try:
                     installed=await self.probe_node(config,node,confirm_host)
                     if installed!=version:include.add(node.id)
-                    step('probe:'+node.id,installed or '未部署')
-                    progress(node.name+'：'+(installed or '未部署')+('，需要二进制' if node.id in include else '，仅更新配置'))
+                    step('probe:'+node.id,installed or tr('未部署'))
+                    progress(node.name+'：'+(installed or tr('未部署'))+(tr('，需要二进制') if node.id in include else tr('，仅更新配置')))
                     break
-                except Stopped:raise TaskCancelled('未确认主机身份') from None
+                except Stopped:raise TaskCancelled(tr('未确认主机身份')) from None
                 except Exception as error:
-                    if await decide(DeploymentIssue(node.id,node.name,'probe',str(error)))!='retry':raise TaskCancelled('已停止版本探测')
+                    if await decide(DeploymentIssue(node.id,node.name,'probe',str(error)))!='retry':raise TaskCancelled(tr('已停止版本探测'))
         checkpoint()
         packages=await asyncio.to_thread(self.app.releases.assemble,batch,version,include,destination='tasks',
             progress=lambda value:report(progress,value),
@@ -258,5 +259,5 @@ class Deployment:
                 try:
                     async with self.app.ssh.connect(ssh_route(config,node.id),confirm_host) as conn:
                         await conn.run('rm -f '+shlex.quote(remote),check=True)
-                except Exception as error:warnings.append(node.name+'：临时文件清理失败 '+str(error))
+                except Exception as error:warnings.append(node.name+tr('：临时文件清理失败 ')+str(error))
         return {'batch':batch,'statuses':statuses,'nodes':nodes,'success':succeeded,'warnings':warnings}

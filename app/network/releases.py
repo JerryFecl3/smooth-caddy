@@ -1,4 +1,5 @@
 """Verified binary cache and atomic release index; no UI dependencies."""
+from ..i18n import tr
 from contextlib import contextmanager
 from dataclasses import dataclass, asdict
 from datetime import datetime
@@ -42,7 +43,7 @@ class BinaryCache:
 
     @staticmethod
     def catalog_versions(values):
-        if not isinstance(values, list): raise ValueError('官方版本列表格式无效')
+        if not isinstance(values, list): raise ValueError(tr('官方版本列表格式无效'))
         return [r['tag_name'] for r in values if not r['draft'] and not r['prerelease'] and re.fullmatch(r'v\d+\.\d+\.\d+',r['tag_name'])]
 
     def cached_versions(self):
@@ -71,7 +72,7 @@ class BinaryCache:
                 error.close()
                 return cached
             raise
-        if len(payload)>16*1024*1024: raise ValueError('官方版本列表超过大小限制')
+        if len(payload)>16*1024*1024: raise ValueError(tr('官方版本列表超过大小限制'))
         versions=self.catalog_versions(json.loads(payload))
         metadata={'sha256':sha(payload),'etag':response_headers.get('ETag'),
                   'last_modified':response_headers.get('Last-Modified')}
@@ -80,35 +81,35 @@ class BinaryCache:
         return versions
 
     def path(self,version,arch):
-        if not re.fullmatch(r'v\d+\.\d+\.\d+',version) or arch not in ARCHES: raise ValueError('版本或架构格式无效')
+        if not re.fullmatch(r'v\d+\.\d+\.\d+',version) or arch not in ARCHES: raise ValueError(tr('版本或架构格式无效'))
         return self.root/version/arch/'caddy'
 
     def get(self,version,arch):
         path=self.path(version,arch)
         data=path.read_bytes()
-        if sha(data)!=path.with_name('sha256').read_text(encoding='utf-8').strip(): raise ValueError('本地 Caddy 缓存校验失败')
+        if sha(data)!=path.with_name('sha256').read_text(encoding='utf-8').strip(): raise ValueError(tr('本地 Caddy 缓存校验失败'))
         return data
 
     def ensure(self,version,arch,progress=lambda _:None,*,cancel=None):
         path=self.path(version,arch)
         try:
             cached=self.get(version,arch)
-            progress(f'使用本地缓存 {version} / {arch}')
+            progress(tr('使用本地缓存 {0} / {1}', version, arch))
             return cached
         except (OSError,ValueError):pass
-        progress(f'获取校验清单 {version} / {arch}')
+        progress(tr('获取校验清单 {0} / {1}', version, arch))
         base=f'https://github.com/caddyserver/caddy/releases/download/{version}/'
         filename=f'caddy_{version[1:]}_linux_{arch}.tar.gz'
         checksums=fetch(base+f'caddy_{version[1:]}_checksums.txt',1024*1024,cancel=cancel).decode()
         match=[line.split()[0] for line in checksums.splitlines() if line.split() and line.split()[-1].lstrip('*')==filename]
-        if len(match)!=1: raise ValueError('官方校验清单缺少所需架构')
-        progress(f'连接下载服务器 {version} / {arch}')
+        if len(match)!=1: raise ValueError(tr('官方校验清单缺少所需架构'))
+        progress(tr('连接下载服务器 {0} / {1}', version, arch))
         payload=fetch(base+filename,progress=progress,cancel=cancel,label=f'Caddy {version} / {arch}',temporary=self.root.parent/'.tmp')
-        progress(f'校验并解压 {version} / {arch}')
-        if hashlib.sha512(payload).hexdigest()!=match[0]: raise ValueError('官方发行文件校验失败')
+        progress(tr('校验并解压 {0} / {1}', version, arch))
+        if hashlib.sha512(payload).hexdigest()!=match[0]: raise ValueError(tr('官方发行文件校验失败'))
         with tarfile.open(fileobj=io.BytesIO(payload),mode='r:gz') as archive:
             entry=archive.getmember('caddy')
-            if not entry.isfile() or entry.size>150*1024*1024: raise ValueError('Caddy 发行包格式无效')
+            if not entry.isfile() or entry.size>150*1024*1024: raise ValueError(tr('Caddy 发行包格式无效'))
             data=archive.extractfile(entry).read()
         publish(path,data,self.root.parent/'.tmp',0o700);atomic(path.with_name('sha256'),sha(data).encode())
         return data
@@ -143,7 +144,7 @@ class PackageSet:
 
 
 def build_package(node, version, caddy, materials, binary=None):
-    platform='debian' if node.platform=='Debian 13' else 'openwrt'
+    platform='debian' if node.platform=='debian_13' else 'openwrt'
     manifest=(f'format=1\nnode_id={node.id}\nplatform={platform}\nrelease={version}\ncaddy_version={caddy}\narch={node.arch}\nbinary_sha256={sha(binary) if binary else ""}\n').encode()
     files={'release/'+name:data for name,data in materials.items()}
     files['release/manifest']=manifest
@@ -180,18 +181,18 @@ class Releases:
         relative=Path(item.directory)
         allowed=('releases',) if isinstance(item,Release) else ('tasks','packages')
         if len(relative.parts)!=2 or relative.parts[0] not in allowed or relative.parts[1] in ('.','..'):
-            raise ValueError('批次目录无效')
+            raise ValueError(tr('批次目录无效'))
         base = self.app.store.directory if isinstance(item,Release) else (self.app.store.temporary if relative.parts[0]=='tasks' else self.app.store.exports)
         path=base/relative
-        if not path.resolve().is_relative_to(base.resolve()):raise ValueError('批次目录超出数据目录')
-        if isinstance(item,Release) and relative.parts[1]!=item.version:raise ValueError('批次目录与标识不符')
+        if not path.resolve().is_relative_to(base.resolve()):raise ValueError(tr('批次目录超出数据目录'))
+        if isinstance(item,Release) and relative.parts[1]!=item.version:raise ValueError(tr('批次目录与标识不符'))
         return path
 
     def list(self):
         path=self.root/'index.json'
         if not path.exists():return []
         value=json.loads(path.read_text(encoding='utf-8'))
-        if value['format']!=3:raise ValueError('配置批次索引格式不受支持')
+        if value['format']!=3:raise ValueError(tr('配置批次索引格式不受支持'))
         result=[Release(**entry) for entry in value['releases']]
         for batch in result:self.directory(batch)
         return result
@@ -203,20 +204,24 @@ class Releases:
         from .models import Configuration
         directory=self.directory(batch)
         payload=(directory/'metadata.json').read_bytes()
-        if sha(payload)!=batch.metadata_sha256:raise ValueError('配置批次 metadata 校验失败')
+        if sha(payload)!=batch.metadata_sha256:raise ValueError(tr('配置批次 metadata 校验失败'))
         metadata=json.loads(payload)
-        if metadata['format']!=1 or metadata['version']!=batch.version:raise ValueError('配置批次格式无效')
-        config=Configuration.from_dict(metadata['configuration'])
+        if type(metadata['format']) is not int or metadata['format'] not in (1,2) or metadata['version']!=batch.version:raise ValueError(tr('配置批次格式无效'))
+        if metadata['format'] == 1:
+            from .migrations import legacy_configuration
+            config = legacy_configuration(metadata['configuration'])
+        else:
+            config = Configuration.from_dict(metadata['configuration'])
         materials={node.id:{} for node in config.nodes}
         for entry in metadata['files']:
             relative=Path(entry['path'])
-            if relative.is_absolute() or '..' in relative.parts or len(relative.parts)<2:raise ValueError('配置文件路径无效')
+            if relative.is_absolute() or '..' in relative.parts or len(relative.parts)<2:raise ValueError(tr('配置文件路径无效'))
             path=directory/relative
-            if not path.resolve().is_relative_to(directory.resolve()):raise ValueError('配置文件超出批次目录')
+            if not path.resolve().is_relative_to(directory.resolve()):raise ValueError(tr('配置文件超出批次目录'))
             from cryptography.fernet import InvalidToken
             try:content=self.app.security.batch_cipher().decrypt(path.read_bytes())
-            except InvalidToken:raise ValueError('配置文件解密失败或已损坏：'+entry['path']) from None
-            if len(content)!=entry['size'] or sha(content)!=entry['sha256']:raise ValueError('配置文件缺失或损坏：'+entry['path'])
+            except InvalidToken:raise ValueError(tr('配置文件解密失败或已损坏：')+entry['path']) from None
+            if len(content)!=entry['size'] or sha(content)!=entry['sha256']:raise ValueError(tr('配置文件缺失或损坏：')+entry['path'])
             materials[relative.parts[0]][Path(*relative.parts[1:]).as_posix()]=content
         return config,materials
 
@@ -228,17 +233,17 @@ class Releases:
         self.app.security.require()
         from .models import configuration_errors
         config=config or self.app.snapshot()
-        if configuration_errors(config) or not config.nodes:raise ValueError('请添加节点并修正配置错误')
+        if configuration_errors(config) or not config.nodes:raise ValueError(tr('请添加节点并修正配置错误'))
         plan=generation_plan(config);steps=plan.steps
         def step(index):
-            if cancel is not None and cancel.is_set():raise TaskCancelled('已停止生成配置批次')
+            if cancel is not None and cancel.is_set():raise TaskCancelled(tr('已停止生成配置批次'))
             task_progress(plan.event(plan.ids[index]));progress(steps[index])
         with self.lock():
             previous=self.list()
             while True:
                 stamp=datetime.now().astimezone().strftime('%Y%m%d-%H%M%S')
                 if not (self.root/stamp).exists():break
-                if cancel is not None and cancel.is_set():raise TaskCancelled('已停止')
+                if cancel is not None and cancel.is_set():raise TaskCancelled(tr('已停止'))
                 time.sleep(.1)
             step(0)
             materials=generate(config,self.app.certificates,stamp,public_materials)
@@ -254,11 +259,11 @@ class Releases:
                 step(len(steps)-1)
                 created=datetime.now().astimezone().isoformat(timespec='seconds')
                 summary={key:[obj.name for obj in getattr(config,key)] for key in ('nodes','sites','regions')}
-                metadata={'format':1,'version':stamp,'created_at':created,'configuration':config.to_dict(),'files':files}
+                metadata={'format':2,'version':stamp,'created_at':created,'configuration':config.to_dict(),'files':files}
                 payload=json.dumps(metadata,ensure_ascii=False,indent=2).encode()
                 atomic(work/'metadata.json',payload)
                 batch=Release(stamp,'releases/'+stamp,created,summary,sha(payload))
-                if cancel is not None and cancel.is_set():raise TaskCancelled('已停止')
+                if cancel is not None and cancel.is_set():raise TaskCancelled(tr('已停止'))
                 os.rename(work,self.root/stamp)
                 try:self._index([batch]+previous)
                 except BaseException:
@@ -272,22 +277,22 @@ class Releases:
         """Build from immutable batch materials. None means all nodes (offline export)."""
         from uuid import uuid4
         self.app.security.require()
-        if destination not in ('packages','tasks'):raise ValueError('输出类型无效')
-        if destination=='packages' and not password:raise ValueError('请输入部署包导出口令')
-        if not re.fullmatch(r'v\d+\.\d+\.\d+',version):raise ValueError('版本须为 vX.Y.Z')
+        if destination not in ('packages','tasks'):raise ValueError(tr('输出类型无效'))
+        if destination=='packages' and not password:raise ValueError(tr('请输入部署包导出口令'))
+        if not re.fullmatch(r'v\d+\.\d+\.\d+',version):raise ValueError(tr('版本须为 vX.Y.Z'))
         config,materials=self.load(batch)
         included={n.id for n in config.nodes} if include_binary is None else set(include_binary)
-        if not included.issubset({n.id for n in config.nodes}):raise ValueError('节点集合无效')
+        if not included.issubset({n.id for n in config.nodes}):raise ValueError(tr('节点集合无效'))
         plan=assembly_plan(config);steps=plan.steps
         def checkpoint():
-            if cancel is not None and cancel.is_set():raise TaskCancelled('已停止打包')
+            if cancel is not None and cancel.is_set():raise TaskCancelled(tr('已停止打包'))
         def report(value):checkpoint();progress(value)
         def step(i,note=''):checkpoint();task_progress(plan.event(plan.ids[i],note,'success' if note else ''))
-        step(0,'无需下载' if not included else '')
+        step(0,tr('无需下载') if not included else '')
         binaries={}
         for arch in sorted({n.arch for n in config.nodes if n.id in included}):
             binaries[arch]=self.cache.ensure(version,arch,report,cancel=cancel)
-        step(0,'已就绪' if included else '无需下载')
+        step(0,tr('已就绪') if included else tr('无需下载'))
         folder=self.app.store.temporary/destination
         folder.mkdir(parents=True,exist_ok=True,mode=0o700)
         name=datetime.now().astimezone().strftime('%Y%m%d-%H%M%S')+'-'+uuid4().hex[:8]
@@ -296,14 +301,14 @@ class Releases:
             packages=[]
             for i,node in enumerate(config.nodes,1):
                 step(i)
-                report('打包 / '+node.name)
+                report(tr('打包 / ')+node.name)
                 payload=build_package(node,batch.version,version,materials[node.id],binaries.get(node.arch) if node.id in included else None)
                 if destination=='packages':
                     from .package_crypto import encrypt_package
                     payload=encrypt_package(payload,password)
                 filename=node.id+'.run';atomic(work/filename,payload,0o700)
                 packages.append(Package(node.id,node.name,node.platform,node.arch,filename,len(payload),sha(payload)))
-                step(i,'已打包')
+                step(i,tr('已打包'))
             checkpoint()
             if destination == 'packages':
                 target=self.app.store.exports/'packages'/name
@@ -325,19 +330,19 @@ class Releases:
 
     def check_packages(self,packages):
         for package in packages.packages:
-            if Path(package.filename).name!=package.filename:raise ValueError('部署文件名无效')
+            if Path(package.filename).name!=package.filename:raise ValueError(tr('部署文件名无效'))
             data=(self.directory(packages)/package.filename).read_bytes()
-            if len(data)!=package.size or sha(data)!=package.digest:raise ValueError('部署文件损坏：'+package.filename)
+            if len(data)!=package.size or sha(data)!=package.digest:raise ValueError(tr('部署文件损坏：')+package.filename)
 
     def cleanup(self,packages):
-        if not packages.directory.startswith('tasks/'):raise ValueError('只允许清理临时部署文件')
+        if not packages.directory.startswith('tasks/'):raise ValueError(tr('只允许清理临时部署文件'))
         shutil.rmtree(self.directory(packages))
 
     def delete(self,version):
         self.app.security.require()
         with self.lock():
             batches=self.list();batch=next((b for b in batches if b.version==version),None)
-            if batch is None:raise ValueError('配置批次不存在')
+            if batch is None:raise ValueError(tr('配置批次不存在'))
             path=self.directory(batch)
             if path.exists():shutil.rmtree(path)
             self._index([b for b in batches if b.version!=version])

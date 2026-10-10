@@ -60,4 +60,5 @@ the database directly at `~/.smooth-caddy/smooth-caddy.db`. Exports always use
 - Conventionally increase Z for each commit; persistent data-format changes increase Y and reset Z. This is a documentation convention, not an automated commit gate.
 - GitHub release builds are triggered by version-tag pushes, not ordinary branch commits; read the triggering tag and its commit. Initial targets: Linux x64 and Windows x64.
 - Data migrations and compatibility layers are permitted. Support starts from the first formal release; back up before migrations and reject writes to newer formats.
+- Current database format is 3 (automatic backed-up migration from 2); new batch metadata is 2, with read-only decoding of metadata 1. Persist stable configuration identifiers, never translated display labels.
 - Public repository, MIT project license; preserve third-party license obligations. Keep private data, backups, caches and generated exports out of Git.

@@ -1,4 +1,5 @@
 """Generate complete node JSON and ephemeral TLS material from one snapshot."""
+from ..i18n import tr
 import json
 from urllib.parse import urlsplit
 from .models import Listen, canonical_domain, configuration_errors
@@ -8,9 +9,9 @@ def address(host, port): return f'[{host}]:{port}' if ':' in host else f'{host}:
 
 
 def generate(config, certificates, version, public_materials=None):
-    if configuration_errors(config): raise ValueError('配置存在错误，不能生成')
-    if not config.nodes: raise ValueError('请先添加节点')
-    if not certificates.unlocked: raise ValueError('请先初始化 CA 并解锁程序')
+    if configuration_errors(config): raise ValueError(tr('配置存在错误，不能生成'))
+    if not config.nodes: raise ValueError(tr('请先添加节点'))
+    if not certificates.unlocked: raise ValueError(tr('请先初始化 CA 并解锁程序'))
     base = f'/etc/smooth-caddy/releases/{version}'
     shared = {'tls-ca.pem': certificates.public('tls'), 'client-ca.pem': certificates.public('client'),
               'relay-ca.pem': certificates.public('relay')}
@@ -20,9 +21,9 @@ def generate(config, certificates, version, public_materials=None):
         files[name+'.key'] = material.private_key
     for site in config.sites:
         domain = canonical_domain(site.domain)
-        if any(mode in ('HTTPS','HTTPS + mTLS') for mode in site.areas.values()):
-            if site.tls_source=='公共 CA':
-                if not public_materials or site.id not in public_materials:raise ValueError('缺少公共证书：'+site.name)
+        if any(mode in ('https','https_mtls') for mode in site.areas.values()):
+            if site.tls_source=='public_ca':
+                if not public_materials or site.id not in public_materials:raise ValueError(tr('缺少公共证书：')+site.name)
                 cert,key=public_materials[site.id]
                 shared['site-'+site.id+'.pem']=cert
                 shared['site-'+site.id+'.key']=key
@@ -33,7 +34,7 @@ def generate(config, certificates, version, public_materials=None):
             if area.enabled:
                 identity = f'relay-{node.id}-{rid}'
                 add_material(shared, identity, certificates.leaf('relay', 'relay-'+node.id, dns=f'{node.id}.{rid}.internal', ip=area.ip), 'relay')
-        if node.mode == '经上游转发':
+        if node.mode == 'via_upstream':
             add_material(shared,'node-'+node.id,certificates.leaf('relay','node-'+node.id,client=True),'relay')
     for i, cert in enumerate(certificates.enabled_certificates()): shared[f'client-{i}.pem'] = cert
     result = {}
@@ -57,7 +58,7 @@ def generate(config, certificates, version, public_materials=None):
             return r
         def proxy(site):
             transport={'protocol':'http','versions':['1.1','2']}
-            if node.mode == '经上游转发':
+            if node.mode == 'via_upstream':
                 parent=config.find('nodes',node.upstream[0]);rid=node.upstream[1]
                 region=config.find('regions',rid);area=parent.areas[rid]
                 dial=address(area.ip,area.overrides[2] or region.ports[2])
@@ -85,21 +86,21 @@ def generate(config, certificates, version, public_materials=None):
                 return entry
             http=[];https=[];policies=[]
             for site in config.sites:
-                mode=site.areas.get(region.id,'不提供服务');domain=canonical_domain(site.domain)
-                if mode=='HTTP': http.append(route(domain,proxy(site)))
-                elif mode in ('HTTPS','HTTPS + mTLS'):
+                mode=site.areas.get(region.id,'disabled');domain=canonical_domain(site.domain)
+                if mode=='http': http.append(route(domain,proxy(site)))
+                elif mode in ('https','https_mtls'):
                     target='https://'+domain+(':'+ports[1] if ports[1]!='443' else '')+'{http.request.uri}'
                     http.append(route(domain,{'handler':'static_response','status_code':308,'headers':{'Location':[target]}}))
                     https.append(route(domain,proxy(site)))
                     policy=certificate('site-'+site.id);policy['match']={'sni':[domain]}
-                    if mode=='HTTPS + mTLS':
+                    if mode=='https_mtls':
                         policy['client_authentication']=auth('client-ca.pem',[n for n in shared if n.startswith('client-') and n!='client-ca.pem'])
                     policies.append(policy)
             server('http',ports[0],http)
             if policies: server('https',ports[1],https,policies)
             identity=f'relay-{node.id}-{region.id}'
             policy=certificate(identity)
-            children=[n for n in config.nodes if n.mode=='经上游转发' and n.upstream==(node.id,region.id)]
+            children=[n for n in config.nodes if n.mode=='via_upstream' and n.upstream==(node.id,region.id)]
             policy['client_authentication']=auth('relay-ca.pem',['node-'+n.id+'.leaf.pem' for n in children])
             relay=server('relay',ports[2],[route(canonical_domain(s.domain),proxy(s)) for s in config.sites],[policy],strict=False)
             # Authenticated relay peers may forward original request headers. Their TCP

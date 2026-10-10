@@ -23,10 +23,10 @@ class ReleaseTests(unittest.TestCase):
         site=app.create('sites','站点')
         cfg=app.snapshot()
         for i,node in enumerate(cfg.nodes):
-            node.platform='Debian 13' if i==0 else 'OpenWrt 25.12'
+            node.platform='debian_13' if i==0 else 'openwrt_25_12'
             node.arch='amd64';node.areas[rid]=Listen(True,'127.0.0.'+str(i+2))
-        cfg.nodes[1].mode='经上游转发';cfg.nodes[1].upstream=(parent,rid)
-        cfg.sites[0].domain='example.test';cfg.sites[0].source='http://127.0.0.1:9000';cfg.sites[0].areas[rid]='HTTPS + mTLS'
+        cfg.nodes[1].mode='via_upstream';cfg.nodes[1].upstream=(parent,rid)
+        cfg.sites[0].domain='example.test';cfg.sites[0].source='http://127.0.0.1:9000';cfg.sites[0].areas[rid]='https_mtls'
         app.save_configuration(cfg);app.certificates.initialize('Network')
         return app.snapshot(),rid,parent,child
 
@@ -39,6 +39,41 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(TaskCancelled):self.app.releases.create(task_progress=step,cancel=cancel)
         self.assertEqual(self.app.releases.list(),[])
         self.assertFalse(list(self.app.releases.root.glob('.prepare-*')))
+
+    def test_legacy_batch_load_and_package_preserve_original_files(self):
+        from app.network.releases import sha
+        self.configured()
+        batch = self.app.releases.create()
+        directory = self.app.releases.directory(batch)
+        metadata = json.loads((directory/'metadata.json').read_bytes())
+        self.assertEqual(metadata['format'], 2)
+        expected, materials = self.app.releases.load(batch)
+        # Reconstruct the v1 metadata persisted by released versions.
+        metadata['format'] = 1
+        for node in metadata['configuration']['nodes']:
+            node['mode'] = {'direct':'直连源头','via_upstream':'经上游转发'}[node['mode']]
+            node['platform'] = {'debian_13':'Debian 13','openwrt_25_12':'OpenWrt 25.12'}[node['platform']]
+        for site in metadata['configuration']['sites']:
+            site['tls_source'] = {'private_ca':'私有 CA','public_ca':'公共 CA'}[site['tls_source']]
+            site['areas'] = {rid: {'disabled':'不提供服务','http':'HTTP','https':'HTTPS','https_mtls':'HTTPS + mTLS'}[mode]
+                             for rid, mode in site['areas'].items()}
+        payload = json.dumps(metadata, ensure_ascii=False).encode()
+        (directory/'metadata.json').write_bytes(payload)
+        batch.metadata_sha256 = sha(payload)
+        self.app.releases._index([batch])
+        before = {p.relative_to(directory):p.read_bytes() for p in directory.rglob('*') if p.is_file()}
+        index = (self.app.releases.root/'index.json').read_bytes()
+        loaded, loaded_materials = self.app.releases.load(self.app.releases.list()[0])
+        self.assertEqual(loaded.to_dict(), expected.to_dict())
+        self.assertEqual(loaded_materials, materials)
+        packages = self.app.releases.assemble(batch, 'v2.11.7', set(), destination='tasks')
+        self.app.releases.check_packages(packages)
+        self.assertEqual([p.platform for p in packages.packages], ['debian_13','openwrt_25_12'])
+        self.assertEqual((self.app.releases.root/'index.json').read_bytes(), index)
+        self.assertEqual({p.relative_to(directory):p.read_bytes() for p in directory.rglob('*') if p.is_file()}, before)
+        (directory/'metadata.json').write_bytes(payload + b' ')
+        with self.assertRaisesRegex(ValueError, '校验失败'):
+            self.app.releases.load(batch)
 
     def test_generator_peer_pinning_and_private_key_isolation(self):
         cfg,rid,parent,child=self.configured()

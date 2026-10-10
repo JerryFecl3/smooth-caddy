@@ -36,7 +36,7 @@ class NodeTreeTests(unittest.IsolatedAsyncioTestCase):
             a=app.create('nodes','A');b=app.create('nodes','B',a);c=app.create('nodes','C',b)
             try:
                 self.assertEqual([(n.name,p) for n,p in node_tree(app.snapshot().nodes)],[('A',''),('B','└─ '),('C','   └─ ')])
-                config=app.snapshot();config.nodes[0].upstream=(c,'');config.nodes[0].mode='经上游转发'
+                config=app.snapshot();config.nodes[0].upstream=(c,'');config.nodes[0].mode='via_upstream'
                 with self.assertRaisesRegex(ValueError,'循环'):app.save_configuration(config)
                 self.assertIsNone(app.snapshot().nodes[0].upstream)
                 config=app.snapshot();config.nodes[1].upstream=(a,'old-region');app.save_configuration(config)
@@ -53,7 +53,7 @@ class NodeTreeTests(unittest.IsolatedAsyncioTestCase):
                     ui.screen.query_one('#parent',Select).value=''
                     await pilot.press('ctrl+s');await pilot.pause()
                     self.assertIsNone(app.snapshot().nodes[1].upstream)
-                    self.assertEqual(app.snapshot().nodes[1].mode,'直连源头')
+                    self.assertEqual(app.snapshot().nodes[1].mode,'direct')
                     self.assertEqual(ui.col_keys[-1],'upstream')
                 config=app.snapshot()
                 for n in config.nodes:n.ssh_ip='10.0.0.1'

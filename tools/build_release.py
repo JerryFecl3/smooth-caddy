@@ -1,5 +1,6 @@
 """Build a native portable sample; run on each target OS/architecture."""
 import ast
+import argparse
 import os
 import hashlib
 import importlib.metadata as metadata
@@ -17,13 +18,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--preview", action="store_true", help="Build a clean commit without a release tag")
+    args = parser.parse_args()
     system = {'Linux': 'linux', 'Windows': 'windows'}.get(platform.system())
     arch = {'x86_64': 'amd64', 'AMD64': 'amd64', 'aarch64': 'arm64', 'ARM64': 'arm64'}.get(platform.machine())
     if not system or arch != 'amd64':
         raise SystemExit('Unsupported build platform')
     sys.path.insert(0,str(ROOT))
-    from app.version import git_release
-    release=git_release(ROOT,os.environ.get('GITHUB_REF_NAME'))
+    from app.version import git_release, git_preview
+    release=git_preview(ROOT) if args.preview else git_release(ROOT,os.environ.get('GITHUB_REF_NAME'))
     version=release['version']
     name = f'smooth-caddy-{version}-{system}-{arch}'
     work = ROOT / 'build' / 'portable'
@@ -93,8 +97,8 @@ def main():
     else:
         missing.append('Native library license collection needs target-platform review')
     executable=stage/('smooth-caddy.exe' if system=='windows' else 'smooth-caddy')
-    for argument in ('--help','--version'):
-        subprocess.run([str(executable),argument],check=True)
+    for arguments in (('--help',), ('--version',), ('--language', 'en', '--help')):
+        subprocess.run([str(executable), *arguments],check=True)
     report = {'version': version, 'platform': system, 'architecture': arch,
               'python': platform.python_version(), 'libc': platform.libc_ver(),
               'tag': release['tag'], 'commit': release['commit'],

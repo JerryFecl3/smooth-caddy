@@ -22,7 +22,7 @@ class PackageCryptoTests(unittest.TestCase):
         other,_=encrypt_payload(payload,'导出 secret');self.assertNotEqual(other,encrypted)
 
     def test_package_header_and_payload(self):
-        node=Node('node','Node',platform='Debian 13',arch='amd64')
+        node=Node('node','Node',platform='debian_13',arch='amd64')
         original=build_package(node,'20261009-120000','v2.11.7',{'private.key':b'PRIVATE KEY'},b'binary')
         encrypted=encrypt_package(original,'export')
         header,payload=encrypted.split(b'__CADDY_PAYLOAD__\n',1)

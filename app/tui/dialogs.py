@@ -1,4 +1,5 @@
 """Reusable form, password and read-only dialogs."""
+from ..i18n import tr
 import sqlite3
 from rich.text import Text
 from dataclasses import dataclass
@@ -21,7 +22,7 @@ class Field:
     placeholder: str = ''
 
 class Form(ModalScreen):
-    BINDINGS = [Binding('escape', 'cancel', '取消'), Binding('ctrl+s', 'save', '确认'), Binding('ctrl+y', 'confirm_danger', '确认危险操作'), Binding('enter', 'danger_enter', '', priority=True, show=False)]
+    BINDINGS = [Binding('escape', 'cancel', tr('取消')), Binding('ctrl+s', 'save', tr('确认')), Binding('ctrl+y', 'confirm_danger', tr('确认危险操作')), Binding('enter', 'danger_enter', '', priority=True, show=False)]
     def __init__(self, title, fields, validate=None, note='', confirm=False, return_only=False):
         super().__init__()
         self.caption, self.fields, self.validate = title, fields, validate
@@ -56,9 +57,9 @@ class Form(ModalScreen):
                 yield from self.compose_actions()
 
     def compose_actions(self):
-        yield Button('返回 · Esc', id='cancel')
+        yield Button(tr('返回 · Esc'), id='cancel')
         if not self.return_only:
-            yield Button('确认 · ^y' if self.confirm else ('保存 · ^s' if self.fields else '确认 · ^s'), id='save', variant='error' if self.confirm else 'primary')
+            yield Button(tr('确认 · ^y') if self.confirm else (tr('保存 · ^s') if self.fields else tr('确认 · ^s')), id='save', variant='error' if self.confirm else 'primary')
 
     def on_mount(self):
         self.query_one('#dialog-note').display = bool(self.note)
@@ -128,14 +129,14 @@ class Form(ModalScreen):
                 if answer is not None:
                     self.dismiss(values)
             self.app.push_screen(PasswordDialog(
-                '验证危险操作', self.app.application.security.verify_password,
-                note=self.caption, submit_label='验证'), verified)
+                tr('验证危险操作'), self.app.application.security.verify_password,
+                note=self.caption, submit_label=tr('验证')), verified)
             return
         self.dismiss(values)
 
 class SSHGuide(Form):
     def __init__(self, public_key):
-        super().__init__('SSH 公钥与手动初始化', [], return_only=True)
+        super().__init__(tr('SSH 公钥与手动初始化'), [], return_only=True)
         self.public_key = public_key
         self.add_class('ssh-guide-dialog')
 
@@ -144,14 +145,12 @@ class SSHGuide(Form):
             yield Static(self.caption, id='dialog-title', markup=False)
             yield Static('', id='dialog-note')
             with VerticalScroll(id='form-fields'):
-                yield Label('公钥')
+                yield Label(tr('公钥'))
                 with HorizontalScroll(id='public-key-scroll'):
                     yield Static(Text(self.public_key, no_wrap=True, overflow='ignore'), id='public-key')
-                yield Static('\nDebian / OpenSSH\n将公钥追加到 ~/.ssh/authorized_keys。\n'
-                             '\nOpenWrt / Dropbear\n将公钥追加到 /etc/dropbear/authorized_keys。\n'
-                             '\n确保授权登录的用户具备所需权限，并确保 SSHD 允许跳板转发。', markup=False)
+                yield Static(tr('\nDebian / OpenSSH\n将公钥追加到 ~/.ssh/authorized_keys。\n\nOpenWrt / Dropbear\n将公钥追加到 /etc/dropbear/authorized_keys。\n\n确保授权登录的用户具备所需权限，并确保 SSHD 允许跳板转发。'), markup=False)
             with Horizontal(classes='dialog-actions'):
-                yield Button('返回 · Esc', id='cancel')
+                yield Button(tr('返回 · Esc'), id='cancel')
 
 
 class HelpGuide(Form):
@@ -176,17 +175,17 @@ class HelpGuide(Form):
 
 class PasswordDialog(Form):
     """Shared password UI; operation callbacks own their independent semantics."""
-    def __init__(self, title, operation, *, repeat=False, note='', path=None, submit_label='保存', visible=False):
+    def __init__(self, title, operation, *, repeat=False, note='', path=None, submit_label=tr('保存'), visible=False):
         self.operation = operation
         self.submit_label = submit_label
         self.mask_password = not (repeat or visible)
         fields = []
-        if path is not None: fields.append(Field('path', '保存路径', str(path.resolve()), readonly=True))
-        fields.append(Field('password', '口令', secret=True))
-        if repeat: fields.append(Field('repeat', '确认口令', secret=True))
+        if path is not None: fields.append(Field('path', tr('保存路径'), str(path.resolve()), readonly=True))
+        fields.append(Field('password', tr('口令'), secret=True))
+        if repeat: fields.append(Field('repeat', tr('确认口令'), secret=True))
         def validate(values):
-            if not values['password']: return '口令不能为空'
-            if repeat and values['password'] != values['repeat']: return '两次口令不一致'
+            if not values['password']: return tr('口令不能为空')
+            if repeat and values['password'] != values['repeat']: return tr('两次口令不一致')
             try: operation(values['password'])
             except (ValueError, OSError, sqlite3.Error) as error: return str(error)
             return None
@@ -203,21 +202,19 @@ class PasswordDialog(Form):
 class InitializationDialog(Form):
     def __init__(self, operation):
         def validate(values):
-            if not values['password']: return '口令不能为空'
-            if values['password'] != values['repeat']: return '两次口令不一致'
+            if not values['password']: return tr('口令不能为空')
+            if values['password'] != values['repeat']: return tr('两次口令不一致')
             try: operation(values['password'], values['name'])
             except (ValueError, OSError, sqlite3.Error) as error: return str(error)
-        super().__init__('初始化', [
-            Field('password', '初始化口令', secret=True),
-            Field('repeat', '确认口令', secret=True),
-            Field('name', '初始化根CA名称', placeholder='例如：Personal WEB'),
-        ], validate, '使用本软件前，必须设置一个口令。\n'
-           '本程序将生成SSH密钥及根CA私钥，私钥均将受到以上口令保护。\n'
-           '请妥善保管本程序的口令及数据目录。')
+        super().__init__(tr('初始化'), [
+            Field('password', tr('初始化口令'), secret=True),
+            Field('repeat', tr('确认口令'), secret=True),
+            Field('name', tr('初始化根CA名称'), placeholder=tr('例如：Personal WEB')),
+        ], validate, tr('使用本软件前，必须设置一个口令。\n本程序将生成SSH密钥及根CA私钥，私钥均将受到以上口令保护。\n请妥善保管本程序的口令及数据目录。'))
 
     def compose_actions(self):
-        yield Button('退出 · Esc', id='cancel')
-        yield Button('保存 · ^s', id='save', variant='primary')
+        yield Button(tr('退出 · Esc'), id='cancel')
+        yield Button(tr('保存 · ^s'), id='save', variant='primary')
 
     def on_mount(self):
         super().on_mount()

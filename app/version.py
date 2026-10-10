@@ -19,6 +19,14 @@ def git_release(root=ROOT, tag=None):
     commit=git('rev-parse','HEAD')
     return {'version':tag[1:]+'.'+commit[:8],'tag':tag,'commit':commit}
 
+def git_preview(root=ROOT):
+    """Identify a clean CI snapshot without requiring a release tag."""
+    def git(*args):return subprocess.check_output(['git',*args],cwd=root,text=True,stderr=subprocess.DEVNULL).strip()
+    if git('status','--porcelain','--untracked-files=normal'):
+        raise ValueError('预览构建要求工作区干净')
+    commit=git('rev-parse','HEAD')
+    return {'version':'preview.'+commit[:12],'tag':None,'commit':commit}
+
 def display_version():
     embedded=Path(__file__).with_name('build-version.json')
     if embedded.exists():return json.loads(embedded.read_text(encoding='utf-8'))['version']

@@ -17,8 +17,8 @@ class PublicBatchTests(unittest.TestCase):
         self.app.security.setup('secret');self.app.certificates.initialize('Network')
         self.app.create('regions','LAN');self.app.create('nodes','Router');self.app.create('sites','Web')
         c=self.app.snapshot();r=c.regions[0];n=c.nodes[0];s=c.sites[0]
-        n.platform='Debian 13';n.arch='amd64';n.ssh_ip='192.0.2.1';n.areas[r.id]=Listen(True,'192.0.2.1')
-        s.domain='web.example.com';s.source='http://192.0.2.2:8080';s.areas[r.id]='HTTPS';s.tls_source='公共 CA'
+        n.platform='debian_13';n.arch='amd64';n.ssh_ip='192.0.2.1';n.areas[r.id]=Listen(True,'192.0.2.1')
+        s.domain='web.example.com';s.source='http://192.0.2.2:8080';s.areas[r.id]='https';s.tls_source='public_ca'
         self.app.save_configuration(c);self.site=s.id
     def record(self,domain='example.com',wildcard=True):
         return self.app.public_tls.save(domain,wildcard,'alidns','dummy-id','dummy-secret')
@@ -63,7 +63,7 @@ class PublicBatchTests(unittest.TestCase):
     def test_only_referenced_records_once_and_failure_blocks_batch(self):
         identity=self.record();self.record('unused.example.net')
         self.app.create('sites','Second');c=self.app.snapshot();s=c.sites[-1]
-        s.domain='another.example.com';s.source='http://192.0.2.3';s.areas[c.regions[0].id]='HTTPS';s.tls_source='公共 CA';self.app.save_configuration(c)
+        s.domain='another.example.com';s.source='http://192.0.2.3';s.areas[c.regions[0].id]='https';s.tls_source='public_ca';self.app.save_configuration(c)
         with patch.object(self.app.public_tls,'issue_all',return_value={'success':False,'errors':['申请失败']}) as issue:
             with self.assertRaisesRegex(ValueError,'申请失败'):self.app.batches.create()
             self.assertEqual(issue.call_args.args[0],[identity])
@@ -92,7 +92,7 @@ class PublicBatchTests(unittest.TestCase):
         self.assertNotEqual(old,fresh)
 
     def test_no_public_https_means_no_issuance_group(self):
-        c=self.app.snapshot();c.sites[0].areas[c.regions[0].id]='HTTP';self.app.save_configuration(c)
+        c=self.app.snapshot();c.sites[0].areas[c.regions[0].id]='http';self.app.save_configuration(c)
         with patch.object(self.app.public_tls,'issue_all',side_effect=AssertionError('no public TLS')):
             events=[];self.app.batches.create(task_progress=events.append)
         self.assertEqual(set(events[0].groups),{'生成配置批次'})
@@ -128,9 +128,9 @@ class PublicSourceUITests(unittest.IsolatedAsyncioTestCase):
                 column=ui.col_keys.index('tls_source');table.move_cursor(row=0,column=column);table.focus()
                 self.assertIn('待申请',ui.cell_value(ui.demo.sites[0],'tls_source'))
                 await pilot.press('enter');await pilot.pause()
-                self.assertEqual(ui.screen.query_one('#value',Select).value,'公共 CA')
-                ui.screen.query_one('#value',Select).value='私有 CA'
+                self.assertEqual(ui.screen.query_one('#value',Select).value,'public_ca')
+                ui.screen.query_one('#value',Select).value='private_ca'
                 await pilot.press('ctrl+s');await pilot.pause()
-                self.assertEqual(app.snapshot().sites[0].tls_source,'私有 CA')
+                self.assertEqual(app.snapshot().sites[0].tls_source,'private_ca')
                 self.assertFalse(app.errors())
         finally:fixture.doCleanups()

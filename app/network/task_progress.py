@@ -1,4 +1,5 @@
 """UI-independent state for a fixed, at most two-level task plan."""
+from ..i18n import tr
 from dataclasses import dataclass, field
 
 class TaskCancelled(ValueError):
@@ -36,18 +37,18 @@ class TaskState:
 
     def update(self, event):
         if self.steps and (self.steps != event.steps or self.groups != event.groups):
-            raise ValueError('任务计划执行期间不能改变')
+            raise ValueError(tr('任务计划执行期间不能改变'))
         if event.groups and len(event.groups) != len(event.steps):
-            raise ValueError('任务分组与子任务数量不符')
+            raise ValueError(tr('任务分组与子任务数量不符'))
         self.steps, self.groups = event.steps, event.groups
-        if not 0 <= event.index < len(self.steps):raise ValueError('无效任务索引')
+        if not 0 <= event.index < len(self.steps):raise ValueError(tr('无效任务索引'))
         # A serial producer advances one active task; concurrent producers always
         # supply explicit states and never complete another task implicitly.
         if not event.state:
             if self.sequential is not None and self.sequential != event.index:
                 if self.states.get(self.sequential) == 'running':
                     self.states[self.sequential] = 'success'
-                    if not self.notes.get(self.sequential):self.notes[self.sequential] = '已完成'
+                    if not self.notes.get(self.sequential):self.notes[self.sequential] = tr('已完成')
             self.sequential = event.index
         self.current = event.index
         self.states[event.index] = event.state or 'running'
@@ -59,8 +60,8 @@ class TaskState:
             if state in TERMINAL:continue
             if state == 'running':
                 self.states[index] = {'success':'success','failed':'failed','stopped':'stopped','partial':'stopped'}[outcome]
-                if outcome != 'success':self.notes[index] = '失败' if outcome == 'failed' else '已停止'
-            else:self.notes[index] = '未执行'
+                if outcome != 'success':self.notes[index] = tr('失败') if outcome == 'failed' else tr('已停止')
+            else:self.notes[index] = tr('未执行')
 
     def sections(self):
         groups = self.groups or ('',)*len(self.steps)

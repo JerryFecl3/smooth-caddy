@@ -4,6 +4,7 @@ Screen { background: #10151e; color: #d9e2ee; }
 #brand { height: 3; padding: 1 2; text-style: bold; background: $emphasis; color: #e6f4ef; }
 #workspace { height: 1fr; }
 #sidebar { width: 20; background: #141d2b; border-right: solid #29354a; padding: 1; }
+Screen.english #sidebar { width: 26; }
 #nav { height: auto; background: transparent; }
 ListItem { height: 3; padding: 1 1 0 1; }
 ListItem.active-page { background: $emphasis; color: #90d7d1; text-style: bold; }

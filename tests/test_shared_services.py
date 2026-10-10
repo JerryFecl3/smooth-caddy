@@ -44,7 +44,7 @@ class SharedServiceTests(unittest.TestCase):
         try:
             app=fixture.app;identity=fixture.record();cert,_=fixture.store_material(identity)
             app.create('sites','Other');cfg=app.snapshot();site=cfg.sites[-1]
-            site.domain='other.example.com';site.source='http://192.0.2.3';site.tls_source='公共 CA';site.areas=cfg.sites[0].areas.copy();app.save_configuration(cfg)
+            site.domain='other.example.com';site.source='http://192.0.2.3';site.tls_source='public_ca';site.areas=cfg.sites[0].areas.copy();app.save_configuration(cfg)
             with patch.object(app.public_tls,'validate',wraps=app.public_tls.validate) as validate:
                 report=app.batches.inspect(app.snapshot())
                 self.assertFalse(report.errors);self.assertEqual(validate.call_count,1)

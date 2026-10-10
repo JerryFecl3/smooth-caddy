@@ -31,7 +31,7 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual([n.name for n in config.nodes],['HomeRouter','CloudServer1','CloudServer2'])
                     self.assertEqual([n.arch for n in config.nodes],['armv7','amd64','arm64'])
                     self.assertEqual([s.name for s in config.sites],['Blog','Dashboard'])
-                    self.assertEqual(config.sites[1].tls_source,'公共 CA')
+                    self.assertEqual(config.sites[1].tls_source,'public_ca')
                     self.assertEqual(config.nodes[1].upstream,(config.nodes[0].id,config.regions[0].id))
                     for role,suffix in [('root','Root CA'),('tls','TLS CA'),('client','mTLS CA'),('relay','Relay CA')]:
                         cert=x509.load_pem_x509_certificate(app.certificates.public(role))

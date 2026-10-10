@@ -1,4 +1,5 @@
 """Password encryption interoperable with openssl enc on deployment hosts."""
+from ..i18n import tr
 import os
 from cryptography.hazmat.primitives import hashes, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -6,7 +7,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 def encrypt_payload(payload, password):
     if not password or '\n' in password or '\r' in password or '\0' in password:
-        raise ValueError('导出口令不能为空或包含换行及空字符')
+        raise ValueError(tr('导出口令不能为空或包含换行及空字符'))
     salt=os.urandom(8)
     material=PBKDF2HMAC(algorithm=hashes.SHA256(),length=48,salt=salt,iterations=100000).derive(password.encode())
     padder=padding.PKCS7(128).padder();padded=padder.update(payload)+padder.finalize()

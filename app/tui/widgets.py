@@ -1,4 +1,5 @@
 """Shared keyboard conventions for terminal controls."""
+from ..i18n import tr
 from textual.binding import Binding
 from textual.message import Message
 from textual.widgets import Button as TextualButton, Select as TextualSelect, Input as TextualInput, Checkbox as TextualCheckbox
@@ -13,11 +14,11 @@ class Select(TextualSelect, inherit_bindings=False):
     """Closed menus use arrows for focus; Enter opens the option list."""
 
     BINDINGS = [
-        Binding('enter', 'show_overlay', '展开', show=False),
-        Binding('left', 'previous_control', '上一项', show=False),
-        Binding('right', 'next_control', '下一项', show=False),
-        Binding('up', 'previous_control', '上一项', show=False),
-        Binding('down', 'next_control', '下一项', show=False),
+        Binding('enter', 'show_overlay', tr('展开'), show=False),
+        Binding('left', 'previous_control', tr('上一项'), show=False),
+        Binding('right', 'next_control', tr('下一项'), show=False),
+        Binding('up', 'previous_control', tr('上一项'), show=False),
+        Binding('down', 'next_control', tr('下一项'), show=False),
     ]
 
     def action_previous_control(self):
@@ -31,10 +32,10 @@ class Button(TextualButton):
     """Allow leaving action rows and navigating their buttons with arrows."""
 
     BINDINGS = [
-        Binding('up', 'previous_control', '上一项', show=False),
-        Binding('down', 'next_control', '下一项', show=False),
-        Binding('left', 'previous_button', '上一按钮', show=False),
-        Binding('right', 'next_button', '下一按钮', show=False),
+        Binding('up', 'previous_control', tr('上一项'), show=False),
+        Binding('down', 'next_control', tr('下一项'), show=False),
+        Binding('left', 'previous_button', tr('上一按钮'), show=False),
+        Binding('right', 'next_button', tr('下一按钮'), show=False),
     ]
 
     def action_previous_control(self):
@@ -76,8 +77,8 @@ class Input(TextualInput):
     """Vertical arrows navigate; horizontal arrows retain text editing."""
 
     BINDINGS = [
-        Binding('up', 'previous_control', '上一项', show=False),
-        Binding('down', 'next_control', '下一项', show=False),
+        Binding('up', 'previous_control', tr('上一项'), show=False),
+        Binding('down', 'next_control', tr('下一项'), show=False),
     ]
 
     def action_previous_control(self):
@@ -91,8 +92,8 @@ class Checkbox(TextualCheckbox):
     """Explicit monochrome-safe check marks and directional navigation."""
 
     BINDINGS = [
-        Binding('up,left', 'previous_control', '上一项', show=False),
-        Binding('down,right', 'next_control', '下一项', show=False),
+        Binding('up,left', 'previous_control', tr('上一项'), show=False),
+        Binding('down,right', 'next_control', tr('下一项'), show=False),
     ]
 
     @property
@@ -109,7 +110,7 @@ class Checkbox(TextualCheckbox):
 class ListView(TextualListView):
     """Keep navigation and its utility buttons in one keyboard region."""
 
-    BINDINGS = [Binding("space", "select_cursor", "选择", show=False)]
+    BINDINGS = [Binding("space", "select_cursor", tr('选择'), show=False)]
 
     def action_cursor_down(self):
         if self.index == len(self.children) - 1:

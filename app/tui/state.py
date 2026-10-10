@@ -1,4 +1,5 @@
 """Presentation snapshots, never a second business implementation."""
+from ..i18n import tr
 
 class State:
     def __init__(self, application):
@@ -41,6 +42,6 @@ class State:
         self.application.delete(page, obj.id)
         self.reload()
     def upstream_label(self, value):
-        if not value: return '未选择'
+        if not value: return tr('未选择')
         node, region = self.find('nodes', value[0]), self.find('regions', value[1])
-        return f'{node.name if node else "已删除节点"} / {region.name if region else "已删除区域"}'
+        return f"{(node.name if node else tr('已删除节点'))} / {(region.name if region else tr('已删除区域'))}"

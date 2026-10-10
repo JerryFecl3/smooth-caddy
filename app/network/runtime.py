@@ -1,4 +1,5 @@
 """Single-instance ownership and temporary workspace lifetime."""
+from ..i18n import tr
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from .file_lock import FileLock
@@ -11,7 +12,7 @@ class Runtime:
         try:
             self.lock = FileLock(self.directory / '.lock',blocking=False)
         except BlockingIOError:
-            raise ValueError('此 数据目录已有程序运行') from None
+            raise ValueError(tr('此 数据目录已有程序运行')) from None
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='temp-cleanup')
         self.ready = self.executor.submit(self.clean)
 

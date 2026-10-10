@@ -14,7 +14,7 @@ class DeploymentTests(unittest.IsolatedAsyncioTestCase):
             cfg=app.snapshot()
             for i,n in enumerate(cfg.nodes):n.ssh_ip='127.0.0.'+str(i+1)
             app.save_configuration(cfg)
-            packages=[Package(i,n,'Debian 13','amd64',i+'.run',1,'digest') for i,n in zip(ids,('one','two','three'))]
+            packages=[Package(i,n,'debian_13','amd64',i+'.run',1,'digest') for i,n in zip(ids,('one','two','three'))]
             release=PackageSet('20261008-120000','v2.11.7','tasks/attempt',packages,cfg.to_dict())
             events=[];failures={ids[0]:1,ids[1]:2}
             class Connection:
@@ -61,7 +61,7 @@ class DeploymentTests(unittest.IsolatedAsyncioTestCase):
             identity=app.create('nodes','node')
             cfg=app.snapshot();cfg.nodes[0].ssh_ip='127.0.0.1';app.save_configuration(cfg)
             release=PackageSet('20261008-120000','v2.11.7','tasks/attempt',
-                            [Package(identity,'node','Debian 13','amd64','node.run',1,'digest')],cfg.to_dict())
+                            [Package(identity,'node','debian_13','amd64','node.run',1,'digest')],cfg.to_dict())
             commands=[]
             class Connection:
                 async def run(self,command,**kwargs):

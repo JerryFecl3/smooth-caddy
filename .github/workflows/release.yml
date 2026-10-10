@@ -54,6 +54,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -65,8 +68,10 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
           RELEASE_COMMIT: ${{ github.sha }}
         run: |
+          notes="$RUNNER_TEMP/release-notes.md"
+          python3 tools/release_notes.py "$RELEASE_TAG" --repo "$GH_REPO" --output "$notes"
           if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" --verify-tag --target "$RELEASE_COMMIT" --title "Smooth Caddy $RELEASE_TAG" --generate-notes --draft
+            gh release create "$RELEASE_TAG" --verify-tag --target "$RELEASE_COMMIT" --title "Smooth Caddy $RELEASE_TAG" --notes-file "$notes" --draft
           fi
           gh release upload "$RELEASE_TAG" dist/* --clobber
           gh release edit "$RELEASE_TAG" --draft=false
