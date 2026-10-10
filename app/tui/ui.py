@@ -1,6 +1,6 @@
 """Persistent terminal interface using the application command boundary."""
 from ..i18n import tr
-from ..i18n import get_language, save_language
+from ..i18n import get_language
 from .widgets import Button, ListView, DataTable
 from functools import wraps
 import re
@@ -71,7 +71,6 @@ class Terminal(App, inherit_bindings=False):
                 yield ListView(*[ListItem(Label(title), id='nav-' + key) for key, title in {k: v for k, v in PAGES.items() if k != 'ca'}.items()], id='nav')
                 yield Static('', id='nav-note')
                 yield Button(tr('修改口令'), id='password')
-                yield Button(tr('语言 / Language'), id='language')
                 yield Button(tr('帮助 · F10'), id='help')
                 yield Button(tr('退出 · ^q'), id='quit')
             with Vertical(id='main'):
@@ -645,17 +644,6 @@ class Terminal(App, inherit_bindings=False):
     def action_help(self):
         self.action_toggle_shortcuts()
 
-    def language_settings(self):
-        def validate(values):
-            try:
-                save_language(self.application.store.directory, values['language'])
-            except (ValueError, OSError) as error:
-                return str(error)
-        self.push_screen(Form(tr('界面语言'), [Field('language', tr('语言'), get_language(),
-            [('简体中文', 'zh-CN'), ('English', 'en')])], validate,
-            tr('保存后下次启动生效。命令行 --language 可临时覆盖。')))
-
-
     @on(Button.Pressed)
     def buttons(self, event):
         key = event.button.id
@@ -664,7 +652,6 @@ class Terminal(App, inherit_bindings=False):
         elif key == 'site-settings': self.site_settings()
         elif key == 'edit': self.edit_selected()
         elif key == 'help': self.action_help()
-        elif key == 'language': self.language_settings()
         elif key == 'quit': self.exit()
         elif key == 'pub-details': self.public_tls_page.action_details()
         elif key == 'pub-all': self.public_tls_page.apply_all()

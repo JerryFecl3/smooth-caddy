@@ -42,7 +42,7 @@ TLS证书
 
 语言
 
-在侧栏选择简体中文或英文，保存后下次启动生效。--language zh-CN 或 --language en 可临时覆盖。用户名称、域名、证书内容及外部工具输出不翻译。
+启动时自动跟随系统语言：中文环境使用简体中文，其他环境使用英文。不保存语言偏好。--language zh-CN 或 --language en 可临时覆盖。用户名称、域名、证书内容及外部工具输出不翻译。
 
 第三方软件与服务条款
 
@@ -104,7 +104,7 @@ This application does not manage DNS records for routing, network routes, port f
 
 Language
 
-Choose Simplified Chinese or English with the sidebar language setting. Saved changes take effect on the next launch. The --language zh-CN or --language en option overrides the saved preference for that launch. Names you enter, domains, certificate contents, and external tool output are not translated.
+The interface follows your system language at startup: Simplified Chinese for Chinese locales, English otherwise. No language preference is saved. The --language zh-CN or --language en option overrides detection for that launch. Names you enter, domains, certificate contents, and external tool output are not translated.
 
 Third-party software and terms
 

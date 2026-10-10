@@ -1,6 +1,7 @@
 """Process-wide startup language; translation never touches configuration values."""
-import json
-from pathlib import Path
+import locale
+import os
+import sys
 from .messages import EN
 
 LANGUAGES = ('zh-CN', 'en')
@@ -23,26 +24,23 @@ def tr(message, *values):
     return text.format(*values) if values else text
 
 
-def saved_language(directory):
-    path = Path(directory) / 'ui.json'
-    if not path.exists():
-        return 'zh-CN'
-    value = json.loads(path.read_text(encoding='utf-8'))
-    if not isinstance(value, dict):
-        raise ValueError(tr('语言设置无效，请使用 zh-CN 或 en'))
-    language = value.get('language', 'zh-CN')
-    if language not in LANGUAGES:
-        raise ValueError(tr('语言设置无效，请使用 zh-CN 或 en'))
-    return language
-
-
-def save_language(directory, language):
-    if language not in LANGUAGES:
-        raise ValueError(tr('语言设置无效，请使用 zh-CN 或 en'))
-    from .network.files import atomic
-    path = Path(directory) / 'ui.json'
-    value = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
-    if not isinstance(value, dict):
-        raise ValueError(tr('语言设置无效，请使用 zh-CN 或 en'))
-    value['language'] = language
-    atomic(path, (json.dumps(value, ensure_ascii=False, indent=2) + '\n').encode('utf-8'))
+def system_language():
+    """Windows display language, or POSIX message locale; English fallback."""
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            language_id = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+            return 'zh-CN' if language_id & 0x3ff == 0x04 else 'en'
+        except (AttributeError, OSError):
+            return 'en'
+    for name in ('LC_ALL', 'LC_MESSAGES', 'LANG'):
+        value = os.environ.get(name)
+        if value:
+            break
+    else:
+        try:
+            value = locale.getlocale(locale.LC_MESSAGES)[0] or ''
+        except (AttributeError, ValueError, locale.Error):
+            value = ''
+    language = value.lower().replace('-', '_').split('.')[0].split('@')[0]
+    return 'zh-CN' if language == 'zh' or language.startswith('zh_') else 'en'

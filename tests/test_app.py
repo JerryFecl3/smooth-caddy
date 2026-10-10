@@ -10,6 +10,21 @@ from unittest.mock import patch
 from app.entry import main, default_data_directory
 
 class EntryTests(unittest.TestCase):
+    def setUp(self):
+        from app.i18n import get_language, set_language
+        self.addCleanup(set_language, get_language())
+        detector = patch('app.entry.system_language', return_value='zh-CN')
+        detector.start()
+        self.addCleanup(detector.stop)
+
+    def test_system_language_and_explicit_override(self):
+        from app.i18n import get_language
+        with patch('app.entry.system_language', return_value='en'), patch('app.tui.ui.main'):
+            main([])
+            self.assertEqual(get_language(), 'en')
+            main(['--language', 'zh-CN'])
+            self.assertEqual(get_language(), 'zh-CN')
+
     def test_data_directory_forwarded(self):
         with tempfile.TemporaryDirectory() as directory,patch('app.tui.ui.main') as run:
             main(['--data-dir',directory]);run.assert_called_once_with(directory)

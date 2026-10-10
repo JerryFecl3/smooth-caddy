@@ -1,13 +1,14 @@
 import ast
-import json
+import os
 from pathlib import Path
 import string
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch, Mock
 
-from app.i18n import get_language, saved_language, save_language, set_language, tr
+from app.i18n import get_language, system_language, set_language, tr
 from app.messages import EN
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,47 +29,67 @@ class LanguageTests(unittest.TestCase):
                                          in formatter.parse(text) if field is not None)
             self.assertEqual(fields(source), fields(translated), source)
 
-    def test_preferences_validation_and_user_text(self):
-        previous = get_language()
-        try:
-            with tempfile.TemporaryDirectory() as directory:
-                path = Path(directory) / 'ui.json'
-                self.assertEqual(saved_language(directory), 'zh-CN')
-                path.write_text('{"other": 42}', encoding='utf-8')
-                save_language(directory, 'en')
-                self.assertEqual(saved_language(directory), 'en')
-                self.assertEqual(json.loads(path.read_text())['other'], 42)
-                set_language('en')
-                self.assertEqual(tr('节点'), 'Nodes')
-                self.assertIn('我的节点', tr('新增') + '我的节点')
-                for invalid in ('[]', '{"language":"fr"}', 'invalid'):
-                    path.write_text(invalid, encoding='utf-8')
-                    with self.assertRaises(ValueError):
-                        saved_language(directory)
-                path.write_text('[]', encoding='utf-8')
-                with self.assertRaises(ValueError):
-                    save_language(directory, 'en')
-        finally:
-            set_language(previous)
+    def test_posix_language_detection(self):
+        cases = [({}, 'en'), ({'LANG': 'zh_CN.UTF-8'}, 'zh-CN'),
+                 ({'LANG': 'zh_TW.UTF-8'}, 'zh-CN'), ({'LANG': 'zh-HK'}, 'zh-CN'),
+                 ({'LANG': 'de_DE.UTF-8'}, 'en'), ({'LANG': 'invalid'}, 'en'),
+                 ({'LANG': 'zh_CN', 'LC_MESSAGES': 'en_US'}, 'en'),
+                 ({'LANG': 'en_US', 'LC_MESSAGES': 'en_US', 'LC_ALL': 'zh_CN'}, 'zh-CN'),
+                 ({'LANG': 'zh_CN', 'LC_ALL': 'C.UTF-8'}, 'en')]
+        cases.extend(({'LANG': value}, 'zh-CN') for value in
+                     ('zh', 'zh_CN', 'zh_SG', 'zh_TW', 'zh_HK', 'zh_MO',
+                      'zh-Hans', 'zh-Hant', 'zh-Hant-HK', 'zh_CN.GB18030', 'zh_TW.UTF-8@variant'))
+        with patch('app.i18n.sys.platform', 'linux'), patch('app.i18n.locale.getlocale', return_value=(None, None)):
+            for environment, expected in cases:
+                with self.subTest(environment=environment), patch.dict(os.environ, environment, clear=True):
+                    self.assertEqual(system_language(), expected)
+        with patch('app.i18n.sys.platform', 'linux'), patch.dict(os.environ, {}, clear=True):
+            with patch('app.i18n.locale.getlocale', return_value=('zh_CN', 'UTF-8')):
+                self.assertEqual(system_language(), 'zh-CN')
+            with patch('app.i18n.locale.getlocale', side_effect=ValueError):
+                self.assertEqual(system_language(), 'en')
 
-    def test_cli_saved_language_and_temporary_override(self):
+    def test_windows_display_language(self):
+        api = Mock()
+        with patch('app.i18n.sys.platform', 'win32'), patch('ctypes.windll', api, create=True):
+            for language_id, expected in [(0x0804, 'zh-CN'), (0x0404, 'zh-CN'), (0x0c04, 'zh-CN'), (0x1004, 'zh-CN'), (0x1404, 'zh-CN'), (0x0409, 'en'), (0x0407, 'en'), (0, 'en')]:
+                api.kernel32.GetUserDefaultUILanguage.return_value = language_id
+                self.assertEqual(system_language(), expected)
+            api.kernel32.GetUserDefaultUILanguage.side_effect = OSError
+            self.assertEqual(system_language(), 'en')
+
+    def test_cli_ignores_old_settings_and_does_not_write_files(self):
         with tempfile.TemporaryDirectory() as directory:
-            save_language(directory, 'en')
+            path = Path(directory) / 'ui.json'
+            path.write_text('invalid old settings', encoding='utf-8')
             def help_text(*args):
                 return subprocess.run([sys.executable, 'smooth_caddy.py', '--data-dir', directory,
                                        *args, '--help'], cwd=ROOT, check=True,
                                       capture_output=True, text=True, encoding='utf-8').stdout
-            self.assertNotIn('个人网络', help_text())
+            self.assertNotIn('个人网络', help_text('--language', 'en'))
             self.assertIn('个人网络', help_text('--language', 'zh-CN'))
-            self.assertEqual(saved_language(directory), 'en')
-            self.assertFalse((Path(directory) / 'smooth-caddy.db').exists())
+            help_text()
+            self.assertEqual(path.read_text(), 'invalid old settings')
+            self.assertEqual(list(Path(directory).iterdir()), [path])
+
+    @unittest.skipIf(sys.platform == 'win32', 'Windows uses the display-language API')
+    def test_real_entry_follows_message_locale_without_creating_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for language, chinese in [('zh_Hant_TW.UTF-8', True), ('en_US.UTF-8', False), ('C', False)]:
+                environment = dict(os.environ, LC_ALL=language, LANG='zh_CN.UTF-8')
+                result = subprocess.run(
+                    [sys.executable, 'smooth_caddy.py', '--data-dir', directory, '--help'],
+                    cwd=ROOT, env=environment, check=True, capture_output=True,
+                    text=True, encoding='utf-8')
+                self.assertEqual('个人网络' in result.stdout, chinese, result.stdout)
+            self.assertEqual(list(Path(directory).iterdir()), [])
 
     def test_english_ui_in_fresh_process(self):
         # Production chooses the language before loading UI classes and bindings.
         script = '''
 import asyncio
 import tempfile
-from app.i18n import set_language, saved_language
+from app.i18n import set_language
 set_language('en')
 from app.network.application import Application
 from app.tui.ui import Terminal, PAGES
@@ -91,20 +112,11 @@ async def check():
                 await pilot.press('ctrl+s')
                 await pilot.pause()
                 assert len(ui.screen_stack) == 1
-                assert str(ui.query_one('#language', Button).label) == 'Language'
+                assert not ui.query('#language')
                 assert PAGES['nodes'] == 'Nodes'
                 for key in ('f1', 'f2', 'f3', 'f4', 'f5', 'f6'):
                     await pilot.press(key)
                     await pilot.pause()
-                before = app.snapshot().to_dict()
-                ui.language_settings()
-                await pilot.pause()
-                assert ui.screen.caption == 'Interface language'
-                ui.screen.query_one('#language', Select).value = 'zh-CN'
-                await pilot.press('ctrl+s')
-                await pilot.pause()
-                assert saved_language(directory) == 'zh-CN'
-                assert app.snapshot().to_dict() == before
                 assert options(['direct'])[0][1] == 'direct'
                 assert 'Smooth Caddy' in usage_guide()
         finally:
