@@ -43,7 +43,7 @@ class LanguageTests(unittest.TestCase):
             for environment, expected in cases:
                 with self.subTest(environment=environment), patch.dict(os.environ, environment, clear=True):
                     self.assertEqual(system_language(), expected)
-        with patch('app.i18n.sys.platform', 'linux'), patch.dict(os.environ, {}, clear=True):
+        with patch('app.i18n.sys.platform', 'linux'), patch.dict(os.environ, {}, clear=True), patch('app.i18n.locale.LC_MESSAGES', 5, create=True):
             with patch('app.i18n.locale.getlocale', return_value=('zh_CN', 'UTF-8')):
                 self.assertEqual(system_language(), 'zh-CN')
             with patch('app.i18n.locale.getlocale', side_effect=ValueError):
