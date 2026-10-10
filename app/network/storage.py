@@ -6,7 +6,7 @@ from pathlib import Path
 import os
 import sqlite3
 from .models import Configuration
-from .migrations import DATABASE_VERSION, migrate_v2
+from .migrations import DATABASE_VERSION, migrate_database
 
 APPLICATION_ID = 0x434C4E31
 
@@ -34,8 +34,8 @@ class Store:
             with self.transaction():
                 version = self.db.execute('PRAGMA user_version').fetchone()[0]
                 if identity == APPLICATION_ID:
-                    if version == 2:
-                        migrate_v2(self.db, self.path)
+                    if version in (2, 3, 4):
+                        migrate_database(self.db, self.path, version)
                     elif version > DATABASE_VERSION:
                         raise ValueError(tr('数据库版本较新，请升级程序；不会写入'))
                     elif version != DATABASE_VERSION:
@@ -46,6 +46,7 @@ class Store:
                 self.db.execute('CREATE TABLE IF NOT EXISTS authorities (role TEXT PRIMARY KEY, name TEXT NOT NULL, cert BLOB NOT NULL, key BLOB NOT NULL)')
                 self.db.execute('CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE, enabled INTEGER NOT NULL, cert BLOB NOT NULL, key BLOB NOT NULL)')
                 self.db.execute('CREATE TABLE IF NOT EXISTS secrets (name TEXT PRIMARY KEY, value BLOB NOT NULL)')
+                self.db.execute('CREATE TABLE IF NOT EXISTS ssh_hosts (route_id TEXT PRIMARY KEY, key BLOB NOT NULL)')
                 self.db.execute('CREATE TABLE IF NOT EXISTS hosts (node_id TEXT PRIMARY KEY, key BLOB NOT NULL)')
                 self.db.execute('INSERT OR IGNORE INTO configuration VALUES (1, 0, ?)', (json.dumps(Configuration().to_dict()),))
         except BaseException:

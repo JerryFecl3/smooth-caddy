@@ -57,7 +57,22 @@ class PublicTLS:
     def list(self):
         with self.security._mutex:
             rows=self.store.db.execute('SELECT value FROM secrets WHERE name LIKE ? ORDER BY rowid',(PREFIX+'item/%',)).fetchall()
-            return [self.get(json.loads(row[0])['id']) for row in rows]
+            identities = [json.loads(row[0])['id'] for row in rows]
+            order = self._get(PREFIX+'order', [])
+            identities = [identity for identity in order if identity in identities] + [identity for identity in identities if identity not in order]
+            return [self.get(identity) for identity in identities]
+
+    def move(self, identity, offset):
+        if offset not in (-1, 1): raise ValueError('Invalid move')
+        with self.security._mutex, self.store.transaction():
+            self.security.require()
+            order = [item['id'] for item in self.list()]
+            index = order.index(identity)
+            target = index + offset
+            if not 0 <= target < len(order): return False
+            order[index], order[target] = order[target], order[index]
+            self._put(PREFIX+'order', order)
+            return True
 
     def environment(self, staging=None):
         return 'staging' if (self.settings()['staging'] if staging is None else staging) else 'production'
@@ -98,6 +113,7 @@ class PublicTLS:
             raise ValueError(tr('请输入域名，不含协议、路径或 *'))
         if provider not in PROVIDERS:raise ValueError(tr('请选择 DNS 服务商'))
         with self.security._mutex,self.store.transaction():
+            order = [item['id'] for item in self.list()]
             old=self.get(identity) if identity else None
             for item in self.list():
                 if item['id']!=identity and item['domain']==domain :raise ValueError(tr('域名已存在'))
@@ -112,6 +128,8 @@ class PublicTLS:
             item.update(domain=domain,wildcard=bool(wildcard),provider=provider,revision=item.get('revision',0)+1)
             secret.update(credential_id=credential_id,credential_key=credential_key)
             self._put(PREFIX+'item/'+identity,item);self._put_secret(identity,secret)
+            if identity not in order: order.append(identity)
+            self._put(PREFIX+'order', order)
         return identity
 
     def delete(self,identity):

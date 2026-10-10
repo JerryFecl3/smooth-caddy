@@ -2,7 +2,7 @@
 from ..i18n import tr
 import json
 from urllib.parse import urlsplit
-from .models import Listen, canonical_domain, configuration_errors
+from .models import Listen, canonical_domain, configuration_errors, relay_endpoint, RELAY_SERVER_NAME
 
 
 def address(host, port): return f'[{host}]:{port}' if ':' in host else f'{host}:{port}'
@@ -33,8 +33,8 @@ def generate(config, certificates, version, public_materials=None):
         for rid, area in node.areas.items():
             if area.enabled:
                 identity = f'relay-{node.id}-{rid}'
-                add_material(shared, identity, certificates.leaf('relay', 'relay-'+node.id, dns=f'{node.id}.{rid}.internal', ip=area.ip), 'relay')
-        if node.mode == 'via_upstream':
+                add_material(shared, identity, certificates.leaf('relay', 'relay-'+node.id, dns=RELAY_SERVER_NAME, ip=area.ip), 'relay')
+        if node.upstream_url:
             add_material(shared,'node-'+node.id,certificates.leaf('relay','node-'+node.id,client=True),'relay')
     for i, cert in enumerate(certificates.enabled_certificates()): shared[f'client-{i}.pem'] = cert
     result = {}
@@ -58,12 +58,10 @@ def generate(config, certificates, version, public_materials=None):
             return r
         def proxy(site):
             transport={'protocol':'http','versions':['1.1','2']}
-            if node.mode == 'via_upstream':
-                parent=config.find('nodes',node.upstream[0]);rid=node.upstream[1]
-                region=config.find('regions',rid);area=parent.areas[rid]
-                dial=address(area.ip,area.overrides[2] or region.ports[2])
-                identity=f'relay-{parent.id}-{rid}'
-                transport['tls']={'ca':pool(identity+'.leaf.pem'),'server_name':f'{parent.id}.{rid}.internal',
+            if node.upstream_url:
+                host, port = relay_endpoint(node.upstream_url)
+                dial=address(host,port)
+                transport['tls']={'ca':pool('relay-ca.pem'),'server_name':RELAY_SERVER_NAME,
                     'client_certificate_file':file('node-'+node.id+'.pem'),
                     'client_certificate_key_file':file('node-'+node.id+'.key')}
             else:
@@ -97,11 +95,13 @@ def generate(config, certificates, version, public_materials=None):
                         policy['client_authentication']=auth('client-ca.pem',[n for n in shared if n.startswith('client-') and n!='client-ca.pem'])
                     policies.append(policy)
             server('http',ports[0],http)
-            if policies: server('https',ports[1],https,policies)
+            if policies:
+                entry = server('https',ports[1],https,policies)
+                # Detect plaintext before TLS; relay listeners must remain TLS-only.
+                entry['listener_wrappers'] = [{'wrapper':'http_redirect'}, {'wrapper':'tls'}]
             identity=f'relay-{node.id}-{region.id}'
             policy=certificate(identity)
-            children=[n for n in config.nodes if n.mode=='via_upstream' and n.upstream==(node.id,region.id)]
-            policy['client_authentication']=auth('relay-ca.pem',['node-'+n.id+'.leaf.pem' for n in children])
+            policy['client_authentication']={'mode':'require_and_verify','ca':pool('relay-ca.pem')}
             relay=server('relay',ports[2],[route(canonical_domain(s.domain),proxy(s)) for s in config.sites],[policy],strict=False)
             # Authenticated relay peers may forward original request headers. Their TCP
             # addresses can differ from listener addresses due to network routing/NAT.

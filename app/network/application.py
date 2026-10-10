@@ -2,7 +2,7 @@
 from ..i18n import tr
 from copy import deepcopy
 from uuid import uuid4
-from .models import Region, Node, Site, Listen, validate_uniqueness, check_node_parent
+from .models import Region, Node, Site, Listen, validate_uniqueness
 from .storage import Store
 from .security import Security
 from .certificates import Certificates, validate_certificate_name, CA_SUFFIXES
@@ -40,13 +40,13 @@ class Application:
             config.regions = [Region(private, 'Private'), Region(public, 'Public')]
             config.nodes = [Node(router, 'HomeRouter',
                 areas={private: Listen(True, '192.168.1.1')},
-                platform='openwrt_25_12', arch='armv7', ssh_ip='192.168.1.1')]
+                platform='openwrt_25_12', arch='armv7', ssh_hops=[['192.168.1.1']])]
             for index, arch in ((1, 'amd64'), (2, 'arm64')):
                 ip = f'192.168.100.{100 + index}'
                 config.nodes.append(Node(uuid4().hex, f'CloudServer{index}',
-                    mode='via_upstream', upstream=(router, private),
+                    upstream_url='https://192.168.1.1:8443',
                     areas={private: Listen(True, ip), public: Listen(True, '192.168.8.100')},
-                    platform='debian_13', arch=arch, ssh_ip=ip))
+                    platform='debian_13', arch=arch, ssh_hops=[['192.168.1.1'], [ip]]))
             config.sites = [
                 Site(uuid4().hex, 'Blog', 'blog.myabc.com', 'http://192.168.1.50:80',
                      {private: 'https', public: 'https'}),
@@ -61,19 +61,27 @@ class Application:
         self.security.require()
         candidate = deepcopy(configuration)
         validate_uniqueness(candidate)
-        for node in candidate.nodes:
-            check_node_parent(candidate,node.id,node.upstream[0] if node.upstream else None)
         return self.store.save(candidate)
 
-    def create(self, collection, name, upstream=None):
+    def create(self, collection, name):
         if collection not in ('regions', 'nodes', 'sites'): raise ValueError(tr('不支持的配置类型'))
         config = self.snapshot()
         item = {'regions': Region, 'nodes': Node, 'sites': Site}[collection](uuid4().hex, name.strip())
-        if collection == "nodes" and upstream:
-            item.upstream=(upstream, "");item.mode="via_upstream"
         getattr(config, collection).append(item)
         self.save_configuration(config)
         return item.id
+
+    def move(self, collection, identity, offset):
+        if collection not in ('regions', 'nodes', 'sites') or offset not in (-1, 1):
+            raise ValueError('Invalid move')
+        config = self.snapshot()
+        items = getattr(config, collection)
+        index = next(i for i, item in enumerate(items) if item.id == identity)
+        target = index + offset
+        if not 0 <= target < len(items): return False
+        items[index], items[target] = items[target], items[index]
+        self.save_configuration(config)
+        return True
 
     def delete(self, collection, identity):
         if collection not in ('regions', 'nodes', 'sites'): raise ValueError(tr('不支持删除此对象'))

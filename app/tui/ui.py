@@ -19,7 +19,7 @@ from .labels import label
 from .guide import usage_guide
 from .configuration import edit_configuration
 from .dialogs import Field, Form, SSHGuide, HelpGuide, PasswordDialog, InitializationDialog
-from ..network.models import Listen, MODES, PORTS, node_tree
+from ..network.models import Listen, MODES, PORTS
 
 PAGES = {'deployment': tr('部署'), 'sites': tr('站点'), 'nodes': tr('节点'), 'regions': tr('区域'), 'clients': tr('mTLS证书'), 'public_tls': tr('TLS证书'), 'ca': tr('mTLS证书 / CA')}
 
@@ -38,6 +38,8 @@ class Terminal(App, inherit_bindings=False):
     CSS_PATH = 'tui.tcss'
     ENABLE_COMMAND_PALETTE = False
     BINDINGS = [
+        Binding("f7", "move_item(-1)", show=False),
+        Binding("f8", "move_item(1)", show=False),
         Binding('f10', 'toggle_shortcuts', tr('帮助'), priority=True),
         *[Binding(f'f{i}', f'nav_page({i})', title, priority=True) for i, title in enumerate((tr('部署'), tr('站点'), tr('节点'), tr('区域'), tr('mTLS证书'), tr('TLS证书')), 1)],
         Binding('tab', 'next_region', tr('下一区域'), priority=True),
@@ -59,7 +61,6 @@ class Terminal(App, inherit_bindings=False):
         self.public_tls_page = PublicTLSPage(self)
         self.page = 'deployment'
         self.rendered_page = None
-        self.site_order = []
         self.col_keys = []
         self.row_ids = []
         self.positions = {}
@@ -150,6 +151,27 @@ class Terminal(App, inherit_bindings=False):
         self.render_page()
         self.query_one('#matrix').focus()
 
+    def action_move_item(self, offset):
+        if len(self.screen_stack) != 1 or self.page not in ('nodes', 'sites', 'regions', 'public_tls'): return
+        table = self.query_one('#matrix', DataTable)
+        if self.focused is not table: return
+        row, column = table.cursor_coordinate
+        identities = [item['id'] for item in self.public_tls_page.records] if self.page == 'public_tls' else self.row_ids
+        if not 0 <= row + offset < len(identities): return
+        identity, page = identities[row], self.page
+        def move():
+            if page == 'public_tls':
+                self.demo.application.public_tls.move(identity, offset)
+                self.public_tls_page.refresh_records()
+            else:
+                self.demo.application.move(page, identity, offset)
+                self.demo.reload()
+                self.positions[page] = (row + offset, column)
+                self.render_page()
+            table.move_cursor(row=row + offset, column=column)
+            table.focus()
+        self.require_unlock(move)
+
     def action_toggle_shortcuts(self):
         if self.help_state == 2:
             self.help_screen.dismiss(None)
@@ -228,15 +250,6 @@ class Terminal(App, inherit_bindings=False):
             self.call_after_refresh(self.public_tls_page.refresh_records)
 
     def render_page(self):
-        if self.page == 'sites':
-            if self.rendered_page != 'sites':
-                self.demo.reload()
-                self.site_order = [site.id for site in sorted(self.demo.sites, key=lambda site: (site.name.casefold(), site.name))]
-            else:
-                present = {site.id for site in self.demo.sites}
-                self.site_order = [identity for identity in self.site_order if identity in present]
-                known = set(self.site_order)
-                self.site_order.extend(site.id for site in self.demo.sites if site.id not in known)
         self.rendered_page = self.page
         self.demo.refresh_validation()
         errors = self.demo.errors()
@@ -286,8 +299,7 @@ class Terminal(App, inherit_bindings=False):
         else:
             columns = [('name', tr('名称'), 18 if self.page == 'clients' else 11)]
             if self.page == 'nodes':
-                columns[0]=('name',tr('名称'),11+max((len(prefix) for _,prefix in node_tree(self.demo.nodes)),default=0))
-                columns += [('platform', tr('平台 / 架构'), 20), ('ssh_ip', tr('SSH 地址'), max(18, min(42, max((len(n.ssh_ip) for n in self.demo.nodes), default=0) + 3)))]
+                columns += [('platform', tr('平台 / 架构'), 20), ('ssh_hops', tr('SSH 路径'), max(18, min(46, max((len(self.cell_value(n, 'ssh_hops')) for n in self.demo.nodes), default=0) + 1)))]
             elif self.page == 'sites':
                 columns += [('domain', tr('服务域名'), 25), ('tls_source', tr('TLS 来源'), 20), ('source', tr('源头地址'), 30)]
             elif self.page == 'regions':
@@ -295,20 +307,16 @@ class Terminal(App, inherit_bindings=False):
             else:
                 columns += [('enabled', tr('状态'), 6), ('expiry', tr('有效期至'), 10)]
             if self.page in ('nodes', 'sites'):
-                columns += [('area:' + r.id, tr('WEB服务地址({0})', r.name) if self.page == 'nodes' else r.name, 32 if self.page == 'nodes' else 20) for r in self.demo.regions]
-            if self.page == 'nodes': columns += [('upstream',tr('中继上游IP'),max(15,min(39,max((len(a.ip) for n in self.demo.nodes for a in n.areas.values()),default=0))))]
+                columns += [('area:' + r.id, tr('绑定地址({0})', r.name) if self.page == 'nodes' else r.name, 32 if self.page == 'nodes' else 20) for r in self.demo.regions]
+            if self.page == 'nodes': columns += [('upstream_url',tr('上游地址'),36)]
             for key, label, width in columns:
                 table.add_column(label, key=key, width=max(width, cell_len(label)))
                 self.col_keys.append(key)
-            items = [self.demo.find('sites', identity) for identity in self.site_order] if self.page == 'sites' else self.demo.items(self.page)
-            prefixes={}
-            if self.page == 'nodes':
-                tree=node_tree(items);items=[n for n,_ in tree];prefixes={n.id:p for n,p in tree}
+            items = self.demo.items(self.page)
             for obj in items:
                 cells = []
                 for key in self.col_keys:
                     value = self.cell_value(obj, key)
-                    if key == "name":value=prefixes.get(obj.id, "")+value
                     bad = (self.page, obj.id, key) in errors or (key == 'platform' and (self.page, obj.id, 'arch') in errors)
                     cells.append(Text(('! ' if bad else '') + value, style='#ffb4a2' if bad else ''))
                 table.add_row(*cells, key=obj.id)
@@ -321,15 +329,13 @@ class Terminal(App, inherit_bindings=False):
         if key == 'tls_source':
             pending=self.demo.validation.pending.get(obj.id)
             return label(obj.tls_source)+(' / '+pending if pending else '')
-        if key == 'upstream':
-            if not obj.upstream:return ''
-            parent=self.demo.find('nodes',obj.upstream[0])
-            if not parent:return tr('已删除节点')
-            if not obj.upstream[1]:return tr('未选择')
-            if not self.demo.find('regions',obj.upstream[1]):return tr('已删除区域')
-            return parent.areas.get(obj.upstream[1],Listen()).ip or tr('未配置 IP')
+        if key == 'upstream_url':
+            return obj.upstream_url or tr('直达源头')
         if key == 'platform':
             return f'{label(obj.platform)} {obj.arch}' if obj.platform and obj.arch else tr('未配置')
+        if key == 'ssh_hops':
+            if not obj.ssh_hops: return tr('未配置')
+            return obj.ssh_hops[-1][0] + (f' (+{len(obj.ssh_hops)-1})' if len(obj.ssh_hops)>1 else '')
         if key == 'expiry':
             return '2099-12-31'
         if key == 'enabled':
@@ -363,7 +369,7 @@ class Terminal(App, inherit_bindings=False):
 
     def update_selection(self):
         obj, key = self.current()
-        self.query_one('#edit').disabled = obj is None or (self.page == 'nodes' and key == 'upstream' and not obj.upstream)
+        self.query_one('#edit').disabled = obj is None
         if self.page == 'clients':
             self.query_one('#client-toggle').disabled = obj is None
             self.query_one('#p12').disabled = obj is None
@@ -389,7 +395,6 @@ class Terminal(App, inherit_bindings=False):
     @on(DataTable.CellSelected)
     def edit_selected(self):
         obj,key=self.current()
-        if self.page == 'nodes' and key == 'upstream' and obj and not obj.upstream:return
         self.require_unlock(lambda:edit_configuration(self))
 
     def after_change(self, message):
@@ -426,7 +431,7 @@ class Terminal(App, inherit_bindings=False):
         def saved(v):
             if v is None:
                 return
-            self.demo.create(page, v['name'], v.get('parent'))
+            self.demo.create(page, v['name'])
             self.positions[page] = (len(self.demo.items(page))-1, 0)
             self.render_page()
             if page == 'nodes':
@@ -434,7 +439,7 @@ class Terminal(App, inherit_bindings=False):
                 self.query_one('#matrix').move_cursor(row=self.row_ids.index(identity))
             self.query_one('#matrix').focus()
         self.push_screen(Form(tr('签发 Client') if page == 'clients' else tr('新增') + PAGES[page],
-                              [Field('name', tr('名称'), placeholder=tr('例如：Personal-Phone') if page == 'clients' else '')] + ([Field('parent',tr('上游节点'),'',[(tr('无'),'')]+[(n.name,n.id) for n in self.demo.nodes])] if page == 'nodes' else []), lambda v: self.name_error(page, v['name']),
+                              [Field('name', tr('名称'), placeholder=tr('例如：Personal-Phone') if page == 'clients' else '')], lambda v: self.name_error(page, v['name']),
                               '' if page != 'clients' else tr('仅允许英文字母、数字、空格及 - _ .；有效期至 2099-12-31')), saved)
 
     @unlocked_operation
@@ -456,12 +461,7 @@ class Terminal(App, inherit_bindings=False):
         if obj is None:
             return
         page = self.page
-        refs = [n.name for n in self.demo.nodes if n.upstream and
-                ((page == 'nodes' and n.upstream[0] == obj.id) or (page == 'regions' and n.upstream[1] == obj.id))]
-        note = tr('受影响上游引用：') + ('、'.join(refs) if refs else tr('无'))
-        if page == 'regions':
-            note += tr('\n同时移除所有节点和站点的该区域设置。')
-        if refs: note += tr('\n这些节点的上游配置需要修正，否则无法生成配置批次。')
+        note = tr('同时移除所有节点和站点的该区域设置。') if page == 'regions' else ''
         def done(v):
             if v is not None:
                 self.demo.delete(page, obj)

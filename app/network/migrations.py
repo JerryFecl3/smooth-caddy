@@ -8,7 +8,7 @@ import sqlite3
 from uuid import uuid4
 from .models import Configuration
 
-DATABASE_VERSION = 3
+DATABASE_VERSION = 5
 
 
 def legacy_configuration(value):
@@ -25,23 +25,80 @@ def legacy_configuration(value):
         for site in value['sites']:
             site['tls_source'] = sources[site['tls_source']]
             site['areas'] = {key: services[mode] for key, mode in site['areas'].items()}
-        return Configuration.from_dict(value)
+        return configuration_v3(value)
     except (KeyError, TypeError) as error:
         raise ValueError(tr('旧配置格式或枚举值不受支持，未转换数据')) from error
 
 
-def migrate_v2(db, path):
+def configuration_v3(value):
+    """Expand the old business-derived SSH route; never keep a partial route."""
+    value = deepcopy(value)
+    nodes = {node['id']: node for node in value['nodes']}
+    paths = {}
+    from .models import ssh_ip
+    for node in value['nodes']:
+        path = []; seen = set(); current = node
+        try:
+            while current is not None:
+                if current['id'] in seen: raise ValueError()
+                seen.add(current['id'])
+                path.append([ssh_ip(current['ssh_ip'])])
+                if current['mode'] == 'direct': break
+                if current['mode'] != 'via_upstream': raise ValueError()
+                current = nodes[current['upstream'][0]]
+            paths[node['id']] = list(reversed(path))
+        except (KeyError, TypeError, ValueError, IndexError):
+            paths[node['id']] = []
+    for node in value['nodes']:
+        node.pop('ssh_ip', None)
+        node['ssh_hops'] = paths[node['id']]
+    return configuration_v4(value)
+
+
+def configuration_v4(value):
+    """Resolve former node/region references once; broken references stay invalid."""
+    value = deepcopy(value)
+    nodes = {n['id']: n for n in value['nodes']}
+    regions = {r['id']: r for r in value['regions']}
+    urls = {}
+    from .models import relay_endpoint
+    for node in value['nodes']:
+        mode = node['mode']
+        if mode == 'direct':
+            urls[node['id']] = ''
+        elif mode == 'via_upstream':
+            try:
+                parent_id, region_id = node['upstream']
+                area = nodes[parent_id]['areas'][region_id]
+                if not area['enabled']: raise ValueError()
+                host = area['ip']
+                port = area['overrides'][2] if area['overrides'][2] is not None else regions[region_id]['ports'][2]
+                url = 'https://' + ('['+host+']' if ':' in host else host) + ':' + port
+                relay_endpoint(url)
+                urls[node['id']] = url
+            except (KeyError, ValueError, TypeError, IndexError):
+                # Empty means direct-to-origin, so never use it for a broken relay.
+                urls[node['id']] = 'https://'
+        else:
+            raise ValueError(tr('节点配置标识不受支持'))
+    for node in value['nodes']:
+        node.pop('mode');node.pop('upstream')
+        node['upstream_url'] = urls[node['id']]
+    return Configuration.from_dict(value)
+
+
+def migrate_database(db, path, version):
     """Caller holds BEGIN IMMEDIATE; back up committed state before any writes."""
     row = db.execute('SELECT revision, payload FROM configuration WHERE id=1').fetchone()
     if row is None:
         raise ValueError(tr('旧数据库缺少配置记录'))
     revision, payload = row
-    config = legacy_configuration(json.loads(payload))
+    config = {2: legacy_configuration, 3: configuration_v3, 4: configuration_v4}[version](json.loads(payload))
     if config.revision != revision:
         raise ValueError(tr('旧数据库配置修订号不一致'))
     directory = Path(path).parent / 'backups'
     directory.mkdir(mode=0o700, exist_ok=True)
-    backup = directory / ('smooth-caddy-v2-' + uuid4().hex + '.db')
+    backup = directory / (f'smooth-caddy-v{version}-' + uuid4().hex + '.db')
     pending = backup.with_suffix('.pending')
     fd = os.open(pending, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     os.close(fd)

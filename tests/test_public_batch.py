@@ -17,7 +17,7 @@ class PublicBatchTests(unittest.TestCase):
         self.app.security.setup('secret');self.app.certificates.initialize('Network')
         self.app.create('regions','LAN');self.app.create('nodes','Router');self.app.create('sites','Web')
         c=self.app.snapshot();r=c.regions[0];n=c.nodes[0];s=c.sites[0]
-        n.platform='debian_13';n.arch='amd64';n.ssh_ip='192.0.2.1';n.areas[r.id]=Listen(True,'192.0.2.1')
+        n.platform='debian_13';n.arch='amd64';n.ssh_hops=[['192.0.2.1']];n.areas[r.id]=Listen(True,'192.0.2.1')
         s.domain='web.example.com';s.source='http://192.0.2.2:8080';s.areas[r.id]='https';s.tls_source='public_ca'
         self.app.save_configuration(c);self.site=s.id
     def record(self,domain='example.com',wildcard=True):

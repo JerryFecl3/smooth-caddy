@@ -63,7 +63,7 @@ class TerminalTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as directory:
             service=Application(directory);service.store.exports=Path(directory)/"export";service.security.setup('secret')
             rid=service.create('regions','内网');service.create('nodes','Node')
-            cfg=service.snapshot();cfg.nodes[0].platform='debian_13';cfg.nodes[0].arch='amd64';cfg.nodes[0].areas[rid]=Listen(True,'127.0.0.2')
+            cfg=service.snapshot();cfg.nodes[0].platform='debian_13';cfg.nodes[0].arch='amd64';cfg.nodes[0].ssh_hops=[['127.0.0.2']];cfg.nodes[0].areas[rid]=Listen(True,'127.0.0.2')
             service.save_configuration(cfg);service.certificates.initialize('Network')
             try:
                 ui=Terminal(service)
@@ -520,7 +520,7 @@ class ConfirmationStyleTests(unittest.IsolatedAsyncioTestCase):
                 service.close()
 
 class SiteOrderingTests(unittest.IsolatedAsyncioTestCase):
-    async def test_sort_on_entry_and_append_until_reentry(self):
+    async def test_saved_order_and_append_survive_reentry(self):
         with tempfile.TemporaryDirectory() as directory:
             service=Application(directory);service.store.exports=Path(directory)/"export";service.security.setup('secret')
             z=service.create('sites','Zulu');b=service.create('sites','bravo')
@@ -528,16 +528,16 @@ class SiteOrderingTests(unittest.IsolatedAsyncioTestCase):
             try:
                 async with ui.run_test(size=(140,40)) as pilot:
                     await pilot.press('f2');await pilot.pause()
-                    self.assertEqual(ui.row_ids,[b,z])
+                    self.assertEqual(ui.row_ids,[z,b])
                     await pilot.press('ctrl+n');await pilot.pause()
                     ui.screen.query_one('#name',Input).value='Alpha'
                     await pilot.press('ctrl+s');await pilot.pause()
                     a=next(site.id for site in service.snapshot().sites if site.name=='Alpha')
-                    self.assertEqual(ui.row_ids,[b,z,a])
+                    self.assertEqual(ui.row_ids,[z,b,a])
                     ui.after_change('')
-                    self.assertEqual(ui.row_ids,[b,z,a])
+                    self.assertEqual(ui.row_ids,[z,b,a])
                     await pilot.press('f1','f2');await pilot.pause()
-                    self.assertEqual(ui.row_ids,[a,b,z])
+                    self.assertEqual(ui.row_ids,[z,b,a])
                     self.assertEqual([site.id for site in service.snapshot().sites],[z,b,a])
             finally:
                 service.close()

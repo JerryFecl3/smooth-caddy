@@ -330,7 +330,7 @@ EN = {'个人网络 Caddy 配置与证书管理': 'Caddy configuration and certi
                                                                                       'trust it.',
  '平台 / 架构': 'Platform / Arch',
  '中继上游IP': 'Upstream relay IP',
- 'WEB服务地址({0})': 'Service address ({0})',
+ '绑定地址({0})': 'Bind address ({0})',
  '例如：Personal-Phone': 'Example: Personal-Phone',
  ' 默认端口': ' default port',
  '展开': 'Expand',
@@ -565,3 +565,20 @@ EN = {'个人网络 Caddy 配置与证书管理': 'Caddy configuration and certi
  '旧数据库缺少配置记录': 'Legacy database has no configuration record',
  '旧数据库配置修订号不一致': 'Legacy database configuration revisions do not match',
  '迁移备份校验失败': 'Migration backup verification failed'}
+
+EN.update({
+    'SSH 路径': 'SSH path',
+    'SSH 路径不能为空': 'SSH path is required',
+    'SSH 每一跳必须恰好包含一个 IP': 'Each SSH hop must contain exactly one IP address',
+    '第 {0} 行不是有效的 SSH IP 地址': 'Line {0} is not a valid SSH IP address',
+    ' / SSH 第 {0} 跳': ' / SSH hop {0}',
+    '每行一个 IP，按连接顺序填写，最后一行是目标节点。': 'One IP per line, in connection order. The last line is the target node.',
+})
+
+EN.update({
+    '上游地址': 'Upstream address',
+    '直达源头': 'Direct to origin',
+    '留空直连源头；填写时必须指向已存在的中继服务地址和端口（HTTPS）。请避免转发环路。': 'Leave empty to connect directly to site origins. The HTTPS address and port must point to an existing relay service. Avoid forwarding loops.',
+    '上游地址须为 HTTPS 地址，可带端口，不带路径、凭据或查询参数': 'Upstream address must be an HTTPS address with an optional port, without a path, credentials or query parameters',
+    '同时移除所有节点和站点的该区域设置。': 'Also removes this region from every node and site.',
+})

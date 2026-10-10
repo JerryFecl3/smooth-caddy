@@ -32,7 +32,7 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual([n.arch for n in config.nodes],['armv7','amd64','arm64'])
                     self.assertEqual([s.name for s in config.sites],['Blog','Dashboard'])
                     self.assertEqual(config.sites[1].tls_source,'public_ca')
-                    self.assertEqual(config.nodes[1].upstream,(config.nodes[0].id,config.regions[0].id))
+                    self.assertEqual(config.nodes[1].upstream_url,'https://192.168.1.1:8443')
                     for role,suffix in [('root','Root CA'),('tls','TLS CA'),('client','mTLS CA'),('relay','Relay CA')]:
                         cert=x509.load_pem_x509_certificate(app.certificates.public(role))
                         self.assertEqual(cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value,'abc '+suffix)

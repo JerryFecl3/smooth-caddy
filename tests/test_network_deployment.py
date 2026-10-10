@@ -12,7 +12,7 @@ class DeploymentTests(unittest.IsolatedAsyncioTestCase):
             app.security.setup('secret')
             ids=[app.create('nodes',x) for x in ('one','two','three')]
             cfg=app.snapshot()
-            for i,n in enumerate(cfg.nodes):n.ssh_ip='127.0.0.'+str(i+1)
+            for i,n in enumerate(cfg.nodes):n.ssh_hops=[['127.0.0.'+str(i+1)]]
             app.save_configuration(cfg)
             packages=[Package(i,n,'debian_13','amd64',i+'.run',1,'digest') for i,n in zip(ids,('one','two','three'))]
             release=PackageSet('20261008-120000','v2.11.7','tasks/attempt',packages,cfg.to_dict())
@@ -49,7 +49,7 @@ class DeploymentTests(unittest.IsolatedAsyncioTestCase):
             app.security.setup('secret')
             try:
                 public=app.ssh.public()
-                app.store.db.execute('INSERT INTO hosts VALUES (?,?)',('node',b'known-key'))
+                app.store.db.execute('INSERT INTO ssh_hosts VALUES (?,?)',('node',b'known-key'))
                 app.ssh.reset()
                 self.assertNotEqual(public,app.ssh.public())
                 self.assertEqual(app.ssh.trusted_count(),1)
@@ -59,7 +59,7 @@ class DeploymentTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as directory, closing(Application(directory)) as app:
             app.security.setup('secret')
             identity=app.create('nodes','node')
-            cfg=app.snapshot();cfg.nodes[0].ssh_ip='127.0.0.1';app.save_configuration(cfg)
+            cfg=app.snapshot();cfg.nodes[0].ssh_hops=[['127.0.0.1']];app.save_configuration(cfg)
             release=PackageSet('20261008-120000','v2.11.7','tasks/attempt',
                             [Package(identity,'node','debian_13','amd64','node.run',1,'digest')],cfg.to_dict())
             commands=[]

@@ -4,12 +4,14 @@ from dataclasses import asdict, dataclass, field
 from ipaddress import ip_address
 from urllib.parse import urlsplit
 import re
+import hashlib
+import json
 
 MODES = ('disabled', 'http', 'https', 'https_mtls')
 PORTS = ('HTTP', 'HTTPS', tr('中继 HTTPS'))
 PLATFORMS = ('debian_13', 'openwrt_25_12')
 ARCHES = ('amd64', 'arm64', 'armv7', '386')
-NODE_MODES = ('direct', 'via_upstream')
+RELAY_SERVER_NAME = 'relay.smooth-caddy.internal'
 TLS_SOURCES = ('private_ca', 'public_ca')
 
 @dataclass
@@ -28,12 +30,11 @@ class Listen:
 class Node:
     id: str
     name: str
-    mode: str = 'direct'
-    upstream: tuple[str, str] | None = None
+    upstream_url: str = ''
     areas: dict[str, Listen] = field(default_factory=dict)
     platform: str = ''
     arch: str = ''
-    ssh_ip: str = ''
+    ssh_hops: list[list[str]] = field(default_factory=list)
 
 @dataclass
 class Site:
@@ -66,8 +67,9 @@ class Configuration:
         nodes = []
         for original in value['nodes']:
             n = dict(original)
+            if 'ssh_hops' not in n or 'upstream_url' not in n or any(key in n for key in ('ssh_ip', 'mode', 'upstream')):
+                raise ValueError(tr('配置格式不受支持'))
             n['areas'] = {k: Listen(**v) for k, v in n['areas'].items()}
-            if n['upstream'] is not None: n['upstream'] = tuple(n['upstream'])
             nodes.append(Node(**n))
         config = cls([Region(**r) for r in value['regions']], nodes,
                      [Site(**s) for s in value['sites']], value['revision'], value['verify_origin_https'])
@@ -81,7 +83,9 @@ class Configuration:
 def validate_enum_values(config):
     """Unknown protocol values are not editable drafts or translated labels."""
     for node in config.nodes:
-        if node.mode not in NODE_MODES or node.platform not in ('', *PLATFORMS):
+        if not isinstance(node.ssh_hops, list) or any(not isinstance(hop, list) or len(hop) != 1 or not isinstance(hop[0], str) for hop in node.ssh_hops):
+            raise ValueError(tr('SSH 每一跳必须恰好包含一个 IP'))
+        if not isinstance(node.upstream_url, str) or node.platform not in ('', *PLATFORMS):
             raise ValueError(tr('节点配置标识不受支持'))
     for site in config.sites:
         if site.tls_source not in TLS_SOURCES or any(mode not in MODES for mode in site.areas.values()):
@@ -142,21 +146,13 @@ def configuration_errors(config):
             if not valid_port(port): add('regions', region, f'p{i}', tr('端口必须是 1–65535 的整数'))
     region_ids = {r.id for r in config.regions}
     for node in config.nodes:
+        try: ssh_addresses(node.ssh_hops)
+        except ValueError as error: add('nodes', node, 'ssh_hops', str(error))
         if node.platform not in PLATFORMS: add('nodes', node, 'platform', tr('请选择目标平台'))
         if node.arch not in ARCHES: add('nodes', node, 'arch', tr('请选择 CPU 架构'))
-        if node.mode not in ('direct', 'via_upstream'): add('nodes', node, 'upstream', tr('转发方式无效'))
-        if node.mode == 'via_upstream':
-            parent = config.find('nodes', node.upstream[0]) if node.upstream and len(node.upstream) == 2 else None
-            region = config.find('regions', node.upstream[1]) if parent else None
-            if not parent or not region: add('nodes', node, 'upstream', tr('上游引用缺失，请重新选择'))
-            elif not parent.areas.get(region.id, Listen()).enabled: add('nodes', node, 'upstream', tr('上游区域未启用'))
-            seen = {node.id}; cursor = node
-            while cursor and cursor.mode == 'via_upstream' and cursor.upstream:
-                cursor = config.find('nodes', cursor.upstream[0])
-                if cursor:
-                    if cursor.id in seen:
-                        add('nodes', node, 'upstream', tr('上游路径存在循环')); break
-                    seen.add(cursor.id)
+        if node.upstream_url:
+            try: relay_endpoint(node.upstream_url)
+            except ValueError as error: add('nodes', node, 'upstream_url', str(error))
         used = {}
         for rid, area in node.areas.items():
             col = 'area:' + rid
@@ -195,48 +191,78 @@ def configuration_errors(config):
     return errors
 
 
-def ssh_route(config, node_id):
-    path = []; seen = set(); node = config.find('nodes', node_id)
-    if node is None: raise ValueError(tr('发布对应节点已删除'))
-    while node:
-        if node.id in seen: raise ValueError(tr('SSH 路径存在循环'))
-        seen.add(node.id)
-        try:
-            if ip_address(node.ssh_ip).is_unspecified: raise ValueError()
-        except ValueError: raise ValueError(node.name + tr(' 的 SSH IP 无效')) from None
-        path.append(node)
-        if node.mode == 'direct': break
-        if not node.upstream: raise ValueError(tr('SSH 上游未配置'))
-        node = config.find('nodes', node.upstream[0])
-        if node is None: raise ValueError(tr('SSH 上游已删除'))
-    return list(reversed(path))
+def ssh_ip(value):
+    address = ip_address(value)
+    if address.is_unspecified or address.is_multicast or '%' in value:
+        raise ValueError()
+    return str(address)
 
 
-def check_node_parent(config, identity, parent):
-    seen={identity}
-    while parent:
-        if parent in seen: raise ValueError(tr('上游路径存在循环'))
-        seen.add(parent)
-        node=config.find('nodes',parent)
-        if node is None: break
-        parent=node.upstream[0] if node.upstream else None
+def parse_ssh_path(text):
+    hops = []
+    for line, value in enumerate(text.splitlines(), 1):
+        value = value.strip()
+        if not value: continue
+        try: hops.append([ssh_ip(value)])
+        except ValueError:
+            raise ValueError(tr('第 {0} 行不是有效的 SSH IP 地址', line)) from None
+    if not hops: raise ValueError(tr('SSH 路径不能为空'))
+    return hops
 
 
-def node_tree(nodes):
-    """Stable preorder, retaining orphaned and invalid nodes for repair."""
-    ids={node.id for node in nodes};children={}
-    for node in nodes:
-        parent=node.upstream[0] if node.upstream else None
-        children.setdefault(parent if parent in ids else None,[]).append(node)
-    result=[];seen=set()
-    def visit(node,label,indent):
-        if node.id in seen:return
-        seen.add(node.id);result.append((node,label))
-        group=children.get(node.id,[])
-        for i,child in enumerate(group):
-            last=i==len(group)-1
-            visit(child,indent+('└─ ' if last else '├─ '),indent+('   ' if last else '│  '))
-    for node in children.get(None,[]):visit(node,'','')
-    for node in nodes:
-        if node.id not in seen:visit(node,'','')
+def ssh_addresses(hops):
+    if not hops: raise ValueError(tr('SSH 路径不能为空'))
+    result = []
+    for index, hop in enumerate(hops, 1):
+        if not isinstance(hop, list) or len(hop) != 1 or not isinstance(hop[0], str):
+            raise ValueError(tr('SSH 每一跳必须恰好包含一个 IP'))
+        try: result.append(ssh_ip(hop[0]))
+        except ValueError:
+            raise ValueError(tr('第 {0} 行不是有效的 SSH IP 地址', index)) from None
     return result
+
+
+@dataclass(frozen=True)
+class SSHHop:
+    id: str
+    name: str
+    address: str
+    trust_id: str
+
+
+def ssh_route(config, node_id):
+    node = config.find('nodes', node_id)
+    if node is None: raise ValueError(tr('发布对应节点已删除'))
+    addresses = ssh_addresses(node.ssh_hops)
+    result = []
+    for index, address in enumerate(addresses):
+        # Same private IP behind different jump hosts is a different SSH identity.
+        prefix = json.dumps(addresses[:index+1], separators=(',', ':')).encode()
+        result.append(SSHHop(node.id, node.name + (tr(' / SSH 第 {0} 跳', index+1) if index < len(addresses)-1 else ''), address,
+                             hashlib.sha256(prefix).hexdigest()))
+    return result
+
+
+def relay_endpoint(value):
+    """Return the dial address, independently of the fixed relay TLS identity."""
+    try:
+        if not isinstance(value, str) or any(c.isspace() or ord(c) < 32 for c in value): raise ValueError()
+        url = urlsplit(value)
+        if url.scheme != 'https' or not url.hostname or url.username is not None or url.password is not None:
+            raise ValueError()
+        if url.path not in ('', '/') or '?' in value or '#' in value or '%' in url.hostname or '\\' in value:
+            raise ValueError()
+        if url.netloc.endswith(':'): raise ValueError()
+        port = url.port if url.port is not None else 443
+        if not 1 <= port <= 65535: raise ValueError()
+        try:
+            ip = ip_address(url.hostname)
+        except ValueError:
+            if ':' in url.hostname or all(c in '0123456789.' for c in url.hostname): raise ValueError()
+            host = canonical_domain(url.hostname)
+        else:
+            if ip.is_unspecified or ip.is_multicast: raise ValueError()
+            host = str(ip)
+        return host, port
+    except (ValueError, TypeError):
+        raise ValueError(tr('上游地址须为 HTTPS 地址，可带端口，不带路径、凭据或查询参数')) from None

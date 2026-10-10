@@ -2,7 +2,6 @@
 from ..i18n import tr
 
 LABELS = {
-    'direct': '直连源头', 'via_upstream': '经上游转发',
     'private_ca': '私有 CA', 'public_ca': '公共 CA',
     'disabled': '不提供服务', 'http': 'HTTP', 'https': 'HTTPS',
     'https_mtls': 'HTTPS + mTLS',

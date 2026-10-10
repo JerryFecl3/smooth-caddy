@@ -14,7 +14,7 @@ class CombinedDeploymentTests(unittest.IsolatedAsyncioTestCase):
         self.app.security.setup('secret');self.app.certificates.initialize('Network')
         for name in ('A','B'):self.app.create('nodes',name)
         cfg=self.app.snapshot()
-        for i,node in enumerate(cfg.nodes):node.platform='debian_13';node.arch='amd64';node.ssh_ip=f'192.0.2.{i+1}'
+        for i,node in enumerate(cfg.nodes):node.platform='debian_13';node.arch='amd64';node.ssh_hops=[[f'192.0.2.{i+1}']]
         self.app.save_configuration(cfg)
         self.batch=self.app.releases.create()
 

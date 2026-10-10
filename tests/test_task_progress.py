@@ -106,7 +106,7 @@ class TaskProgressTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as directory:
             service=Application(directory);service.security.setup('secret')
             identity=service.create('nodes','Node')
-            cfg=service.snapshot();cfg.nodes[0].ssh_ip='192.0.2.1';service.save_configuration(cfg)
+            cfg=service.snapshot();cfg.nodes[0].ssh_hops=[['192.0.2.1']];service.save_configuration(cfg)
             batch=SimpleNamespace(version='test')
             async def execute(original,version,confirm,decide,progress,steps,cancel,created):
                 created(batch);steps(TaskStep(('生成配置批次','探测','打包','上传','部署'),4))

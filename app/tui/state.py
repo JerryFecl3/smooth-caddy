@@ -34,14 +34,10 @@ class State:
     def find(self, page, identity): return next((x for x in self.items(page) if x.id == identity), None)
     def unique(self, page, value, object_id=None, attr='name'):
         return not any(getattr(x, attr).strip().casefold() == value.strip().casefold() for x in self.items(page) if x.id != object_id)
-    def create(self, page, name, upstream=None):
+    def create(self, page, name):
         if page == 'clients': self.application.certificates.sign_client(name)
-        else: self.application.create(page, name, upstream)
+        else: self.application.create(page, name)
         self.reload()
     def delete(self, page, obj):
         self.application.delete(page, obj.id)
         self.reload()
-    def upstream_label(self, value):
-        if not value: return tr('未选择')
-        node, region = self.find('nodes', value[0]), self.find('regions', value[1])
-        return f"{(node.name if node else tr('已删除节点'))} / {(region.name if region else tr('已删除区域'))}"

@@ -206,10 +206,16 @@ class Releases:
         payload=(directory/'metadata.json').read_bytes()
         if sha(payload)!=batch.metadata_sha256:raise ValueError(tr('配置批次 metadata 校验失败'))
         metadata=json.loads(payload)
-        if type(metadata['format']) is not int or metadata['format'] not in (1,2) or metadata['version']!=batch.version:raise ValueError(tr('配置批次格式无效'))
+        if type(metadata['format']) is not int or metadata['format'] not in (1,2,3,4) or metadata['version']!=batch.version:raise ValueError(tr('配置批次格式无效'))
         if metadata['format'] == 1:
             from .migrations import legacy_configuration
             config = legacy_configuration(metadata['configuration'])
+        elif metadata['format'] == 2:
+            from .migrations import configuration_v3
+            config = configuration_v3(metadata['configuration'])
+        elif metadata['format'] == 3:
+            from .migrations import configuration_v4
+            config = configuration_v4(metadata['configuration'])
         else:
             config = Configuration.from_dict(metadata['configuration'])
         materials={node.id:{} for node in config.nodes}
@@ -259,7 +265,7 @@ class Releases:
                 step(len(steps)-1)
                 created=datetime.now().astimezone().isoformat(timespec='seconds')
                 summary={key:[obj.name for obj in getattr(config,key)] for key in ('nodes','sites','regions')}
-                metadata={'format':2,'version':stamp,'created_at':created,'configuration':config.to_dict(),'files':files}
+                metadata={'format':4,'version':stamp,'created_at':created,'configuration':config.to_dict(),'files':files}
                 payload=json.dumps(metadata,ensure_ascii=False,indent=2).encode()
                 atomic(work/'metadata.json',payload)
                 batch=Release(stamp,'releases/'+stamp,created,summary,sha(payload))

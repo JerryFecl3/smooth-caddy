@@ -50,16 +50,16 @@ class MigrationTests(unittest.TestCase):
         store = Store(self.root)
         try:
             config = store.load()
-            self.assertEqual([n.mode for n in config.nodes], ['direct','via_upstream','direct'])
+            self.assertEqual([n.upstream_url for n in config.nodes], ['', 'https://', ''])
             self.assertEqual([n.platform for n in config.nodes], ['debian_13','openwrt_25_12',''])
             self.assertEqual([s.tls_source for s in config.sites], ['public_ca','private_ca'])
             self.assertEqual(set(config.sites[0].areas.values()), {'https_mtls','http','https','disabled'})
             self.assertEqual(config.nodes[0].name, '直连源头')
             self.assertEqual(config.sites[0].name, '公共 CA')
-            self.assertEqual(config.nodes[1].upstream, ('b'*32, ''))
+            self.assertNotIn('upstream', config.to_dict()['nodes'][1])
             self.assertFalse(config.verify_origin_https)
             self.assertEqual(config.revision, 8)
-            self.assertEqual(store.db.execute('PRAGMA user_version').fetchone()[0], 3)
+            self.assertEqual(store.db.execute('PRAGMA user_version').fetchone()[0], 5)
             self.assertEqual(store.db.execute('SELECT value FROM secrets').fetchone()[0], b'unchanged-encrypted-bytes')
         finally:
             store.close()
@@ -126,7 +126,7 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(original, saved)
         with self.assertRaises(ValueError):
             Configuration.from_dict(original)
-        config.nodes[0].mode = '直连源头'
+        config.nodes[0].upstream_url = ['invalid']
         with self.assertRaises(ValueError):
             config.to_dict()
         self.assertEqual(label('https_mtls'), 'HTTPS + mTLS')

@@ -74,7 +74,7 @@ class SSH:
     def public(self):
         row=self.store.db.execute("SELECT value FROM secrets WHERE name='ssh-public'").fetchone()
         return row[0].decode().strip() if row else tr('设置程序口令后生成 SSH 公钥')
-    def trusted_count(self):return self.store.db.execute('SELECT count(*) FROM hosts').fetchone()[0]
+    def trusted_count(self):return self.store.db.execute('SELECT count(*) FROM ssh_hosts').fetchone()[0]
 
     @asynccontextmanager
     async def connect(self, route, confirm):
@@ -83,17 +83,17 @@ class SSH:
         try:
             tunnel=None
             for node in route:
-                key=await asyncio.wait_for(asyncssh.get_server_host_key(node.ssh_ip,22,tunnel=tunnel,config=None),30)
+                key=await asyncio.wait_for(asyncssh.get_server_host_key(node.address,22,tunnel=tunnel,config=None),30)
                 if key is None:raise ValueError(tr('SSH 未提供主机密钥'))
                 public=key.export_public_key()
-                row=self.store.db.execute('SELECT key FROM hosts WHERE node_id=?',(node.id,)).fetchone()
+                row=self.store.db.execute('SELECT key FROM ssh_hosts WHERE route_id=?',(node.trust_id,)).fetchone()
                 if row is None or row[0]!=public:
                     previous=asyncssh.import_public_key(row[0]).get_fingerprint() if row else None
-                    identity=HostIdentity(node.id,node.name,node.ssh_ip,key.get_fingerprint(),previous)
+                    identity=HostIdentity(node.id,node.name,node.address,key.get_fingerprint(),previous)
                     if not await confirm(identity):raise Stopped(tr('未确认主机身份'))
-                    with self.store.transaction():self.store.db.execute('INSERT OR REPLACE INTO hosts VALUES (?,?)',(node.id,public))
+                    with self.store.transaction():self.store.db.execute('INSERT OR REPLACE INTO ssh_hosts VALUES (?,?)',(node.trust_id,public))
                 # Pin the just-approved key on the authenticated connection too.
-                conn=await asyncio.wait_for(asyncssh.connect(node.ssh_ip,22,username='root',tunnel=tunnel,
+                conn=await asyncio.wait_for(asyncssh.connect(node.address,22,username='root',tunnel=tunnel,
                     client_keys=[self.private()],known_hosts=([key],[],[]),agent_path=None,
                     preferred_auth=['publickey'],config=None,keepalive_interval=15,keepalive_count_max=3),30)
                 connections.append(conn);tunnel=conn

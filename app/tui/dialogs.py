@@ -7,7 +7,7 @@ from textual import on
 from textual.binding import Binding
 from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Label, Static
+from textual.widgets import Label, Static, TextArea
 from .widgets import Button, Checkbox, Input, Select
 
 @dataclass
@@ -20,6 +20,7 @@ class Field:
     secret: bool = False
     readonly: bool = False
     placeholder: str = ''
+    multiline: bool = False
 
 class Form(ModalScreen):
     BINDINGS = [Binding('escape', 'cancel', tr('取消')), Binding('ctrl+s', 'save', tr('确认')), Binding('ctrl+y', 'confirm_danger', tr('确认危险操作')), Binding('enter', 'danger_enter', '', priority=True, show=False)]
@@ -46,7 +47,9 @@ class Form(ModalScreen):
                         yield Checkbox(f.label, bool(f.value), id=f.key)
                     else:
                         yield Label(f.label)
-                        if f.readonly:
+                        if f.multiline:
+                            yield TextArea(str(f.value), id=f.key, soft_wrap=False, tab_behavior='focus', classes='ssh-path-input')
+                        elif f.readonly:
                             yield Static(str(f.value), id=f.key, markup=False)
                         elif f.choices is not None:
                             yield Select(f.choices, value=f.value, allow_blank=False, id=f.key)
@@ -63,7 +66,7 @@ class Form(ModalScreen):
 
     def on_mount(self):
         self.query_one('#dialog-note').display = bool(self.note)
-        controls = list(self.query('Input, Select, Checkbox'))
+        controls = list(self.query('Input, Select, Checkbox, TextArea'))
         self.set_focus(controls[0] if controls else self.query_one('#cancel' if self.return_only else '#save'))
         if len(self.fields) == 1 and controls and isinstance(controls[0], Input):
             controls[0].action_select_all()
@@ -119,6 +122,9 @@ class Form(ModalScreen):
                 values[f.key] = f.value
                 continue
             control = self.query_one('#' + f.key)
+            if isinstance(control, TextArea):
+                values[f.key] = control.text
+                continue
             values[f.key] = control.value if not isinstance(control, Input) or f.secret else control.value.strip()
         problem = self.validate(values) if self.validate else None
         if problem:

@@ -127,7 +127,7 @@ class Export(ModalScreen):
                 lambda values:launch(values['password']) if values is not None else None)
             return
         from ..network.models import ssh_route
-        try:routes=[' → '.join(n.name for n in ssh_route(self.config,node.id)) for node in self.config.nodes]
+        try:routes=[node.name + ': ' + ' → '.join(hop.address for hop in ssh_route(self.config,node.id)) for node in self.config.nodes]
         except ValueError as error:self.query_one('#job-status',Static).update(str(error));return
         note=((tr('配置批次：')+self.selected_batch.version+'\n') if self.selected_batch else tr('新增配置批次\n'))+tr('Caddy 版本：{0}\n节点（{1}）\n', version, len(routes))+'\n'.join('  '+r for r in routes)
         if not self.selected_batch and app.application.batches.inspect(self.config)[1] and app.application.public_tls.settings()['staging']:

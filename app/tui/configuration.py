@@ -4,7 +4,7 @@ from copy import deepcopy
 from .widgets import DataTable
 from .dialogs import Field, Form
 from .labels import options as labeled_options
-from ..network.models import Listen, MODES, PORTS, PLATFORMS, ARCHES, duplicate_domain, check_node_parent
+from ..network.models import Listen, MODES, PORTS, PLATFORMS, ARCHES, duplicate_domain, parse_ssh_path, relay_endpoint
 
 
 def edit_configuration(self):
@@ -21,32 +21,22 @@ def edit_configuration(self):
             return
         fields = [Field('value', tr('名称'), obj.name)]
         validator = lambda v: self.name_error(page, v['value'], obj.id)
-        if page == 'nodes':
-            parent=obj.upstream[0] if obj.upstream else ''
-            options=[(tr('无'),'')]+[(n.name,n.id) for n in self.demo.nodes if n.id!=obj.id]
-            if parent and parent not in [value for _,value in options]:options.append((tr('已删除节点'),parent))
-            fields.append(Field('parent',tr('上游节点'),parent,options))
-            def validator(v):
-                error=self.name_error(page,v['value'],obj.id)
-                if error:return error
-                try:check_node_parent(self.demo.config,obj.id,v['parent'])
-                except ValueError as error:return str(error)
     elif key == 'platform':
         fields = [Field('platform', tr('目标平台'), obj.platform, [(tr('未选择'), '')] + labeled_options(PLATFORMS)),
                   Field('arch', tr('CPU 架构'), obj.arch, [(tr('未选择'), '')] + [(x, x) for x in ARCHES])]
-    elif key == 'ssh_ip':
-        fields = [Field('value', tr('SSH 地址'), obj.ssh_ip)]
-        note = tr('root · 端口 22')
-    elif key == 'upstream':
-        if not obj.upstream:
-            return
-        parent=self.demo.find('nodes',obj.upstream[0])
-        options=[(tr('未选择'),'')]
-        if parent:
-            options += [(f"{parent.name}-{r.name}-{parent.areas.get(r.id, Listen()).ip or tr('未配置 IP')}"+('' if parent.areas.get(r.id,Listen()).enabled else tr('（未启用）')),r.id) for r in self.demo.regions]
-        value=obj.upstream[1]
-        if value and value not in [v for _,v in options]:options.append((tr('已删除区域'),value))
-        fields=[Field('region',tr('上游中继区域'),value,options)]
+    elif key == 'ssh_hops':
+        fields = [Field('value', tr('SSH 路径'), '\n'.join(hop[0] for hop in obj.ssh_hops), multiline=True)]
+        note = tr('每行一个 IP，按连接顺序填写，最后一行是目标节点。') + '\n' + tr('root · 端口 22')
+        def validator(v):
+            try: parse_ssh_path(v['value'])
+            except ValueError as error: return str(error)
+    elif key == 'upstream_url':
+        fields = [Field('value', tr('上游地址'), obj.upstream_url, placeholder='https://relay.example.com:8443')]
+        note = tr('留空直连源头；填写时必须指向已存在的中继服务地址和端口（HTTPS）。请避免转发环路。')
+        def validator(v):
+            if v['value']:
+                try: relay_endpoint(v['value'])
+                except ValueError as error: return str(error)
     elif key.startswith('area:'):
         r = self.demo.find('regions', key[5:])
         if page == 'sites':
@@ -89,19 +79,15 @@ def edit_configuration(self):
             obj.ports[int(key[1:])] = v['value']
         elif key == 'platform':
             obj.platform, obj.arch = v['platform'], v['arch']
-        elif key == 'upstream':
-            obj.upstream = (obj.upstream[0],v['region'])
-        elif key == 'name' and page == 'nodes':
-            obj.name=v['value']
-            old=obj.upstream[0] if obj.upstream else ''
-            if old!=v['parent']:
-                obj.upstream=(v['parent'],'') if v['parent'] else None
-            obj.mode='via_upstream' if obj.upstream else 'direct'
+        elif key == 'ssh_hops':
+            obj.ssh_hops = parse_ssh_path(v['value'])
         else:
             setattr(obj, key, v['value'])
         self.demo.save()
         self.after_change(tr('已保存：') + title)
         if page == 'nodes' and obj.id in self.row_ids:
             self.query_one('#matrix').move_cursor(row=self.row_ids.index(obj.id))
-    self.push_screen(Form(title, fields, validator, note), saved)
+    form = Form(title, fields, validator, note)
+    if key == 'ssh_hops': form.add_class('ssh-path-dialog')
+    self.push_screen(form, saved)
 

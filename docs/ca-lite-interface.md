@@ -8,6 +8,7 @@
 
 - 初始化唯一根 CA 及 TLS、Client、中继三个中间 CA。输入统一名称前缀，CN 分别追加 `Root CA`、`TLS CA`、`mTLS CA`、`Relay CA`；`names` 返回实际保存的角色名称映射，既有证书不自动重签。
 - 自动站点和中继证书只在批次生成时签发，保存到批次材料中。
+- 中继服务端叶子证书使用统一 DNS SAN `relay.smooth-caddy.internal` 和 SERVER_AUTH；出站中继叶子证书使用 CLIENT_AUTH。每份叶子和私钥独立，双方只信任 Relay CA 并保留用途及名称验证，不按节点列表绑定叶子证书。用户 Client 白名单认证保持独立。
 - 所有新生成的私有证书（根 CA、中间 CA、Client、网站及中继叶子证书）在现有 CN 之外固定写入 `OU = Smooth Caddy`，不提供配置入口。Issuer 沿用签发 CA 的实际 Subject；已有证书不自动重签，公共 CA 签发的证书不修改。
 - Client 手动签发并持久化，名称唯一，可启用、禁用、导出，不提供单项删除。
 - 新建 CA 的名称前缀与 Client 名称仅允许英文字母、数字、空格及 `- _ .`，保存前去掉首尾空白；CA 名称追加后缀后也须满足 CN 长度限制。既有名称保持原样。

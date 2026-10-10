@@ -30,13 +30,13 @@ class ApplicationTests(unittest.TestCase):
 
     def test_delete_preserves_upstream_and_removes_region_cells(self):
         rid = self.app.create('regions','内网'); parent = self.app.create('nodes','父'); child = self.app.create('nodes','子')
-        cfg = self.app.snapshot(); cfg.nodes[1].mode='via_upstream';cfg.nodes[1].upstream=(parent,rid)
+        cfg = self.app.snapshot(); cfg.nodes[1].upstream_url='https://relay.example.test:8443'
         cfg.nodes[1].areas[rid]=Listen(True,'10.0.0.2');self.app.save_configuration(cfg)
         self.app.delete('regions',rid)
         cfg=self.app.snapshot()
         self.assertNotIn(rid,cfg.nodes[1].areas)
-        self.assertEqual(cfg.nodes[1].upstream,(parent,rid))
-        self.assertIn(('nodes',child,'upstream'),self.app.errors())
+        self.assertEqual(cfg.nodes[1].upstream_url,'https://relay.example.test:8443')
+        self.assertNotIn(('nodes',child,'upstream_url'),self.app.errors())
 
     def test_old_database_rejected_without_mutation(self):
         d=Path(self.tmp.name)/'old';d.mkdir();p=d/'smooth-caddy.db'
