@@ -58,7 +58,8 @@ def migrate_v2(db, path):
                 target.close()
         finally:
             source.close()
-        with pending.open('rb') as stream:
+        # Windows FlushFileBuffers requires a writable file handle.
+        with pending.open('r+b') as stream:
             os.fsync(stream.fileno())
         os.replace(pending, backup)
     except BaseException:

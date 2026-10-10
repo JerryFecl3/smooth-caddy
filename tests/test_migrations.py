@@ -1,4 +1,5 @@
 """Released database v2 migration and immutable batch compatibility."""
+from contextlib import closing
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -37,7 +38,7 @@ class MigrationTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         self.path = self.root / 'smooth-caddy.db'
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute(f'PRAGMA application_id={APPLICATION_ID}')
             db.execute('PRAGMA user_version=2')
             db.execute('CREATE TABLE configuration (id INTEGER PRIMARY KEY, revision INTEGER NOT NULL, payload TEXT NOT NULL)')
@@ -64,7 +65,7 @@ class MigrationTests(unittest.TestCase):
             store.close()
         backups = list((self.root/'backups').glob('*.db'))
         self.assertEqual(len(backups), 1)
-        with sqlite3.connect(backups[0]) as db:
+        with closing(sqlite3.connect(backups[0])) as db, db:
             self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 2)
             self.assertEqual(json.loads(db.execute('SELECT payload FROM configuration').fetchone()[0]), old_configuration())
             self.assertEqual(db.execute('SELECT value FROM secrets').fetchone()[0], b'unchanged-encrypted-bytes')
@@ -89,14 +90,14 @@ class MigrationTests(unittest.TestCase):
             store = Store(self.root)
             store.close()
             backup = next((self.root/'backups').glob('*.db'))
-            with sqlite3.connect(backup) as db:
+            with closing(sqlite3.connect(backup)) as db, db:
                 self.assertEqual(db.execute("SELECT value FROM secrets WHERE name='wal-value'").fetchone()[0], b'committed')
                 self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 2)
         finally:
             writer.close()
 
     def test_write_failure_rolls_back_but_preserves_backup(self):
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("CREATE TRIGGER refuse BEFORE UPDATE ON configuration BEGIN SELECT RAISE(ABORT, 'test'); END")
         before = self.path.read_bytes()
         with self.assertRaises(sqlite3.IntegrityError):
@@ -108,7 +109,7 @@ class MigrationTests(unittest.TestCase):
         for version, payload in [(99, old_configuration()), (2, old_configuration())]:
             if version == 2:
                 payload['nodes'][0]['mode'] = 'unrecognized'
-            with sqlite3.connect(self.path) as db:
+            with closing(sqlite3.connect(self.path)) as db, db:
                 db.execute(f'PRAGMA user_version={version}')
                 db.execute('UPDATE configuration SET payload=?', (json.dumps(payload),))
             before = self.path.read_bytes()
