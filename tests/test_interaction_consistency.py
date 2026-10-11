@@ -38,7 +38,9 @@ class InteractionConsistencyTests(unittest.IsolatedAsyncioTestCase):
                 await pilot.press('f6');await pilot.click('#settings-archives');await pilot.pause()
                 await pilot.press('ctrl+e');await pilot.pause()
                 default=Path(ui.screen.query_one('#path',Input).value)
-                self.assertEqual(default.parent,app.store.exports/'settings')
+                # Windows temporary directories may use an 8.3 alias (RUNNER~1).
+                # Compare canonical paths, as the export dialog resolves its default.
+                self.assertEqual(default.parent.resolve(),(app.store.exports/'settings').resolve())
                 self.assertEqual(default.suffix,'.json')
                 self.assertFalse(default.exists())
                 ui.screen.query_one('#path',Input).value=''
