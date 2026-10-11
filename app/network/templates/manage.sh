@@ -12,7 +12,24 @@ CONFIG=/etc/smooth-caddy
 RELEASES=$CONFIG/releases
 fail() { echo "ERROR: $*" >&2; exit 1; }
 field() { sed -n "s/^$2=//p" "$1/manifest"; }
-valid_release() { echo "$1" | grep -Eq '^[0-9]{8}-[0-9]{6}$' || fail 'Invalid release name'; }
+# Accept legacy timestamps and current collision-resistant deployment identities.
+RELEASE_PATTERN='[0-9]{8}-[0-9]{6}(-[a-f0-9]{8})?'
+valid_release() {
+ case "$1" in ''|*[!0-9a-f-]*) fail 'Invalid release name' ;; esac
+ printf '%s\n' "$1" | grep -Eq "^$RELEASE_PATTERN$" || fail 'Invalid release name'
+}
+release_names() {
+ find "$RELEASES" -maxdepth 1 -type l | sed 's|.*/||' | grep -E "^$RELEASE_PATTERN$" | sort
+}
+cleanup_objects() {
+ for obj in "$RELEASES"/.objects/*; do
+  referenced=0
+  for name in $(release_names); do
+   [ "$(readlink -f "$RELEASES/$name")" != "$obj" ] || referenced=1
+  done
+  [ "$referenced" = 1 ] || rm -rf "$obj"
+ done
+}
 manager_pid() {
  if [ "$PLATFORM" = debian ]; then
   systemctl show smooth-caddy.service --property=MainPID --value
@@ -69,7 +86,7 @@ select_release() {
 prune() {
  active=$(basename "$(readlink "$CONFIG/current")")
  kept=1
- for name in $(find "$RELEASES" -maxdepth 1 -type l -name '????????-??????' | sed 's|.*/||' | sort -r); do
+ for name in $(release_names | sort -r); do
   [ "$name" = "$active" ] && continue
   [ -f "$RELEASES/$name/.success" ] || continue
   if [ "$kept" -lt 5 ]; then kept=$((kept + 1)); continue; fi
@@ -127,10 +144,10 @@ case "${1:-}" in
   fi
   ;;
  list)
-  for name in $(find "$RELEASES" -maxdepth 1 -type l -name '????????-??????' | sort); do
+  for name in $(release_names); do
    status=failed-or-unconfirmed
-   [ ! -f "$name/.success" ] || status=successful
-   echo "$(basename "$name") $status"
+   [ ! -f "$RELEASES/$name/.success" ] || status=successful
+   echo "$name $status"
   done
   ;;
  switch)
@@ -220,14 +237,7 @@ case "${1:-}" in
   activate "$name"
   if [ -n "$old" ] && [ "$old" != "$RELEASES/.objects/$object" ]; then rm -rf "$old"; fi
   # Remove abandoned preparation objects after successful installation only.
-  for obj in "$RELEASES"/.objects/*; do
-   referenced=0
-   for link in "$RELEASES"/????????-??????; do
-    [ -L "$link" ] || continue
-    [ "$(readlink -f "$link")" != "$obj" ] || referenced=1
-   done
-   [ "$referenced" = 1 ] || rm -rf "$obj"
-  done
+  cleanup_objects
   ;;
  *) echo 'Usage: manage list | switch RELEASE | run | install PAYLOAD' >&2; exit 2 ;;
 esac

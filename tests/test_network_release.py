@@ -181,6 +181,13 @@ class ReleaseTests(unittest.TestCase):
             script=tar.extractfile('manage.sh').read()
             checked=subprocess.run(['sh','-n'],input=script,capture_output=True)
             self.assertEqual(checked.returncode,0,checked.stderr)
+            # Exercise the installer with the actual identity emitted by prepare().
+            manifest=tar.extractfile('release/manifest').read().decode()
+            version=next(line.removeprefix('release=') for line in manifest.splitlines() if line.startswith('release='))
+            self.assertEqual(version,batch.version)
+            functions=script.decode().split('case "${1:-}" in',1)[0]
+            checked=subprocess.run(['sh','-c',functions+'\nvalid_release "$1"','test',version],capture_output=True)
+            self.assertEqual(checked.returncode,0,checked.stderr)
         package=(self.app.releases.directory(release)/release.packages[0].filename)
         package.write_bytes(b'broken')
         self.assertEqual(self.app.releases.list(),[])
