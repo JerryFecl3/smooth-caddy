@@ -582,3 +582,12 @@ EN.update({
     '上游地址须为 HTTPS 地址，可带端口，不带路径、凭据或查询参数': 'Upstream address must be an HTTPS address with an optional port, without a path, credentials or query parameters',
     '同时移除所有节点和站点的该区域设置。': 'Also removes this region from every node and site.',
 })
+
+EN.update({
+    '绑定地址': 'Bind addresses',
+    '绑定地址必须为 IP 列表': 'Bind addresses must be a list of IPs',
+    '第 {0} 行不是有效的绑定 IP 地址': 'Line {0} is not a valid bind IP address',
+    '启用区域时至少填写一个绑定地址': 'An enabled region requires at least one bind address',
+    '每行一个 IP，共用下面的一组端口。0.0.0.0 监听全部 IPv4，:: 监听全部 IPv6。': 'One IP per line, sharing the ports below. 0.0.0.0 binds all IPv4 addresses; :: binds all IPv6 addresses.',
+    '{0} {1}（{2}）与{3} {4}（{5}）监听冲突，请修改绑定地址或端口': '{0} {1} ({2}) conflicts with {3} {4} ({5}); change the bind addresses or ports',
+})

@@ -166,7 +166,7 @@ class Certificates:
     def enabled_certificates(self):
         return [row[0] for row in self.store.db.execute('SELECT cert FROM clients WHERE enabled=1 ORDER BY id')]
 
-    def leaf(self, role, name, *, client=False, dns=None, ip=None, until=None):
+    def leaf(self, role, name, *, client=False, dns=None, ip=None, ips=(), until=None):
         if role not in ('tls','client','relay'): raise ValueError(tr('叶子用途无效'))
         self.security.require()
         if not self.initialized: raise ValueError(tr('CA 尚未初始化'))
@@ -174,7 +174,8 @@ class Certificates:
         key = ec.generate_private_key(ec.SECP256R1())
         sans = []
         if dns: sans.append(x509.DNSName(dns))
-        if ip: sans.append(x509.IPAddress(ip_address(ip)))
+        for value in dict.fromkeys(([ip] if ip else []) + list(ips)):
+            sans.append(x509.IPAddress(ip_address(value)))
         cert = issue(name, key, x509.load_pem_x509_certificate(self.public(role)), serialization.load_pem_private_key(self.security.decrypt(self.store.db.execute('SELECT key FROM authorities WHERE role=?', (role,)).fetchone()[0]), None),
                      usages=[ExtendedKeyUsageOID.CLIENT_AUTH if client else ExtendedKeyUsageOID.SERVER_AUTH],
                      sans=sans, until=until or datetime.now(timezone.utc)+timedelta(days=365))

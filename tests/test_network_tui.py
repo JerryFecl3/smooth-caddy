@@ -63,7 +63,7 @@ class TerminalTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as directory:
             service=Application(directory);service.store.exports=Path(directory)/"export";service.security.setup('secret')
             rid=service.create('regions','内网');service.create('nodes','Node')
-            cfg=service.snapshot();cfg.nodes[0].platform='debian_13';cfg.nodes[0].arch='amd64';cfg.nodes[0].ssh_hops=[['127.0.0.2']];cfg.nodes[0].areas[rid]=Listen(True,'127.0.0.2')
+            cfg=service.snapshot();cfg.nodes[0].platform='debian_13';cfg.nodes[0].arch='amd64';cfg.nodes[0].ssh_hops=[['127.0.0.2']];cfg.nodes[0].areas[rid]=Listen(True,['127.0.0.2'])
             service.save_configuration(cfg);service.certificates.initialize('Network')
             try:
                 ui=Terminal(service)

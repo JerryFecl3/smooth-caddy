@@ -55,7 +55,7 @@ class SSHPathTests(unittest.TestCase):
                 cfg=store.load()
                 self.assertEqual(cfg.nodes[1].ssh_hops,[['192.0.2.1'],['192.0.2.2']])
                 self.assertEqual(cfg.revision,original['revision']+1)
-                self.assertEqual(store.db.execute('PRAGMA user_version').fetchone()[0],5)
+                self.assertEqual(store.db.execute('PRAGMA user_version').fetchone()[0],6)
                 self.assertEqual(store.db.execute('SELECT key FROM hosts').fetchone()[0],b'old-trust')
                 self.assertEqual(store.db.execute('SELECT count(*) FROM ssh_hosts').fetchone()[0],0)
             backup=next((Path(directory)/'backups').glob('smooth-caddy-v3-*.db'))

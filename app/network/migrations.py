@@ -8,7 +8,7 @@ import sqlite3
 from uuid import uuid4
 from .models import Configuration
 
-DATABASE_VERSION = 5
+DATABASE_VERSION = 6
 
 
 def legacy_configuration(value):
@@ -84,6 +84,16 @@ def configuration_v4(value):
     for node in value['nodes']:
         node.pop('mode');node.pop('upstream')
         node['upstream_url'] = urls[node['id']]
+    return configuration_v5(value)
+
+
+def configuration_v5(value):
+    """Expand single bind IPs while preserving historical invalid drafts."""
+    value = deepcopy(value)
+    for node in value['nodes']:
+        for area in node['areas'].values():
+            ip = area.pop('ip')
+            area['ips'] = [ip] if ip else []
     return Configuration.from_dict(value)
 
 
@@ -93,7 +103,7 @@ def migrate_database(db, path, version):
     if row is None:
         raise ValueError(tr('旧数据库缺少配置记录'))
     revision, payload = row
-    config = {2: legacy_configuration, 3: configuration_v3, 4: configuration_v4}[version](json.loads(payload))
+    config = {2: legacy_configuration, 3: configuration_v3, 4: configuration_v4, 5: configuration_v5}[version](json.loads(payload))
     if config.revision != revision:
         raise ValueError(tr('旧数据库配置修订号不一致'))
     directory = Path(path).parent / 'backups'

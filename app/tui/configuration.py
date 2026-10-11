@@ -4,7 +4,7 @@ from copy import deepcopy
 from .widgets import DataTable
 from .dialogs import Field, Form
 from .labels import options as labeled_options
-from ..network.models import Listen, MODES, PORTS, PLATFORMS, ARCHES, duplicate_domain, parse_ssh_path, relay_endpoint
+from ..network.models import Listen, MODES, PORTS, PLATFORMS, ARCHES, duplicate_domain, parse_ssh_path, relay_endpoint, binding_addresses, configuration_errors
 
 
 def edit_configuration(self):
@@ -44,11 +44,22 @@ def edit_configuration(self):
             note = ''
         else:
             a = deepcopy(obj.areas.get(r.id, Listen()))
-            fields = [Field('enabled', tr('启用此区域'), a.enabled, boolean=True), Field('ip', tr('监听 IP'), a.ip)]
+            fields = [Field('enabled', tr('启用此区域'), a.enabled, boolean=True), Field('ips', tr('绑定地址'), '\n'.join(a.ips), multiline=True)]
             for i, p in enumerate(PORTS):
                 fields += [Field(f'override{i}', tr('覆盖 {0} 端口（默认 {1}）', p, r.ports[i]), a.overrides[i] is not None, boolean=True),
                            Field(f'port{i}', p + tr(' 端口'), a.overrides[i] if a.overrides[i] is not None else r.ports[i])]
-            note = ''
+            note = tr('每行一个 IP，共用下面的一组端口。0.0.0.0 监听全部 IPv4，:: 监听全部 IPv6。')
+            def candidate(v):
+                addresses = binding_addresses(v['ips'].splitlines()) if v['enabled'] else [ip.strip() for ip in v['ips'].splitlines() if ip.strip()]
+                return Listen(v['enabled'], addresses,
+                              [v[f'port{i}'] if v[f'override{i}'] else None for i in range(3)])
+            def validator(v):
+                try: area = candidate(v)
+                except ValueError as error: return str(error)
+                config = deepcopy(self.demo.config)
+                config.find('nodes', obj.id).areas[r.id] = area
+                problems = configuration_errors(config).get(('nodes', obj.id, key), [])
+                return '\n'.join(problems) or None
     elif key == 'tls_source':
         fields = [Field('value', tr('TLS 来源'), obj.tls_source, labeled_options(('private_ca','public_ca')))]
         note = tr('公共证书来自 TLS证书页面。')
@@ -72,7 +83,7 @@ def edit_configuration(self):
             return
         if key.startswith('area:'):
             if page == 'nodes':
-                obj.areas[key[5:]] = Listen(v['enabled'], v['ip'], [v[f'port{i}'] if v[f'override{i}'] else None for i in range(3)])
+                obj.areas[key[5:]] = candidate(v)
             else:
                 obj.areas[key[5:]] = v['value']
         elif key.startswith('p') and page == 'regions':

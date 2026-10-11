@@ -13,7 +13,7 @@ Smooth Caddy 用于维护一个网络中的多节点 Caddy 配置。区域定义
 配置名称、服务域名、源头地址和 TLS 来源，并为每个区域选择不提供服务、HTTP、HTTPS 或 HTTPS + mTLS。一个站点对应一个域名，自动应用于各节点已启用的区域。
 
 节点
-配置目标平台、CPU 架构、独立的 SSH 路径和上游地址 HTTPS 地址。启用区域时填写监听 IP，端口默认继承区域设置，也可分别覆盖。SSH 每行一个 IP，最后一行是目标，不能为空；Enter 换行，Ctrl+S 保存。列表的 (+N) 表示跳板数。上游地址留空直达站点源头，填写时必须指向已存在的中继服务地址和端口，不引用已有节点；请避免转发环路。中继双方须属于同一中继 CA 体系。
+配置目标平台、CPU 架构、独立的 SSH 路径和上游 HTTPS 地址。启用区域时逐行填写绑定 IP，共用一组端口，默认继承区域设置，也可分别覆盖。0.0.0.0 仅监听 IPv4，:: 仅监听 IPv6。绑定地址列的 (+N) 表示其余地址数。监听冲突会同时标记双方区域，编辑时可查看具体原因。SSH 每行一个 IP，最后一行是目标，不能为空；Enter 换行，Ctrl+S 保存。列表的 (+N) 表示跳板数。上游地址留空直达站点源头，填写时必须指向已存在的中继服务地址和端口，不引用已有节点；请避免转发环路。中继双方须属于同一中继 CA 体系。
 
 区域
 定义内网、外网等服务区域，以及 HTTP、HTTPS、中继 HTTPS 的默认端口。新增区域后，已有节点和站点默认不启用它。
@@ -31,7 +31,7 @@ TLS证书
 推荐使用流程
 
 1. 设置程序口令，并在“mTLS证书 → CA 管理”中初始化私有 CA。即使站点使用公共 CA，中继链路仍需要私有 CA。
-2. 创建区域，再添加节点，填写平台、架构、监听地址和可选上游地址 HTTPS 地址。
+2. 创建区域，再添加节点，填写平台、架构、监听地址和可选上游 HTTPS 地址。
 3. 添加站点，配置域名、源头、TLS 来源及各区域的服务方式。
 4. 使用公共 CA 时，先在“TLS证书”中配置对应域名和 DNS 凭据，并准备 lego。需要用户 mTLS 时，签发 Client 证书并导出 P12。
 5. 修正界面标记的配置错误。待申请、待续签可以交给生成流程处理，不必逐条手动申请。
@@ -79,7 +79,7 @@ Sites
 Set a name, domain, origin URL, and TLS source. Choose Disabled, HTTP, HTTPS, or HTTPS + mTLS for each region. Each site has one domain and applies to the regions enabled on each node.
 
 Nodes
-Set the target platform, CPU architecture, independent SSH path, and upstream HTTPS address. Enable regions and enter listening IPs. Ports inherit region defaults unless overridden. Enter one IP per line for SSH, with the target last. A path is required. Enter adds a line; Ctrl+S saves. (+N) in the table counts jump hosts. Leave the upstream address empty to reach origins directly. If provided, the HTTPS address and port must point to an existing relay service. No node relationship is required; avoid forwarding loops. Both relay peers must share the relay CA.
+Set the target platform, CPU architecture, independent SSH path, and upstream HTTPS address. Enable regions and enter one bind IP per line, all sharing one set of ports. Ports inherit region defaults unless overridden. 0.0.0.0 binds IPv4 only; :: binds IPv6 only. (+N) in the bind column counts additional addresses. Conflicts mark both region cells; edit either cell to see the details. Enter one IP per line for SSH, with the target last. A path is required. Enter adds a line; Ctrl+S saves. (+N) in the table counts jump hosts. Leave the upstream address empty to reach origins directly. If provided, the HTTPS address and port must point to an existing relay service. No node relationship is required; avoid forwarding loops. Both relay peers must share the relay CA.
 
 Regions
 Define regions such as internal and external networks, with default HTTP, HTTPS, and relay HTTPS ports. New regions are disabled on existing nodes and sites by default.

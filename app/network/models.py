@@ -23,7 +23,7 @@ class Region:
 @dataclass
 class Listen:
     enabled: bool = False
-    ip: str = ''
+    ips: list[str] = field(default_factory=list)
     overrides: list[str | None] = field(default_factory=lambda: [None, None, None])
 
 @dataclass
@@ -69,6 +69,8 @@ class Configuration:
             n = dict(original)
             if 'ssh_hops' not in n or 'upstream_url' not in n or any(key in n for key in ('ssh_ip', 'mode', 'upstream')):
                 raise ValueError(tr('配置格式不受支持'))
+            if any('ip' in v or 'ips' not in v for v in n['areas'].values()):
+                raise ValueError(tr('配置格式不受支持'))
             n['areas'] = {k: Listen(**v) for k, v in n['areas'].items()}
             nodes.append(Node(**n))
         config = cls([Region(**r) for r in value['regions']], nodes,
@@ -83,6 +85,8 @@ class Configuration:
 def validate_enum_values(config):
     """Unknown protocol values are not editable drafts or translated labels."""
     for node in config.nodes:
+        if any(not isinstance(area.ips, list) or any(not isinstance(ip, str) for ip in area.ips) for area in node.areas.values()):
+            raise ValueError(tr('绑定地址必须为 IP 列表'))
         if not isinstance(node.ssh_hops, list) or any(not isinstance(hop, list) or len(hop) != 1 or not isinstance(hop[0], str) for hop in node.ssh_hops):
             raise ValueError(tr('SSH 每一跳必须恰好包含一个 IP'))
         if not isinstance(node.upstream_url, str) or node.platform not in ('', *PLATFORMS):
@@ -153,30 +157,33 @@ def configuration_errors(config):
         if node.upstream_url:
             try: relay_endpoint(node.upstream_url)
             except ValueError as error: add('nodes', node, 'upstream_url', str(error))
-        used = {}
+        used = []
         for rid, area in node.areas.items():
             col = 'area:' + rid
             if rid not in region_ids:
                 add('nodes', node, col, tr('区域引用不存在')); continue
             if not area.enabled: continue
             try:
-                address = ip_address(area.ip)
-                if address.is_unspecified: raise ValueError()
-                address = str(address)
-            except ValueError:
-                add('nodes', node, col, tr('必须填写具体 IP，禁止通配地址')); address = area.ip
+                addresses = [ip_address(ip) for ip in binding_addresses(area.ips)]
+            except ValueError as error:
+                add('nodes', node, col, str(error)); addresses = []
             region = config.find('regions', rid)
             if len(area.overrides) != 3 or len(region.ports) != 3:
                 add('nodes', node, col, tr('端口配置数量无效')); continue
             for i, override in enumerate(area.overrides):
                 port = region.ports[i] if override is None else override
                 if not valid_port(port): add('nodes', node, col, PORTS[i] + tr(' 端口无效')); continue
-                endpoint = address, int(port)
-                if endpoint in used:
-                    message = tr('监听冲突：{0}:{1}', address, port)
-                    add('nodes', node, col, message)
-                    if used[endpoint] != col: add('nodes', node, used[endpoint], message)
-                used[endpoint] = col
+                for address in addresses:
+                    for other, other_port, other_region, other_kind in used:
+                        if int(port) != other_port or address.version != other.version: continue
+                        if address != other and not address.is_unspecified and not other.is_unspecified: continue
+                        endpoint = lambda ip, p: f'[{ip}]:{p}' if ip.version == 6 else f'{ip}:{p}'
+                        message = tr('{0} {1}（{2}）与{3} {4}（{5}）监听冲突，请修改绑定地址或端口',
+                                     other_region.name, PORTS[other_kind], endpoint(other, other_port),
+                                     region.name, PORTS[i], endpoint(address, int(port)))
+                        add('nodes', node, col, message)
+                        if other_region.id != rid: add('nodes', node, 'area:' + other_region.id, message)
+                    used.append((address, int(port), region, i))
     for site in config.sites:
         try: canonical_domain(site.domain)
         except ValueError as e: add('sites', site, 'domain', str(e))
@@ -189,6 +196,25 @@ def configuration_errors(config):
         for rid, mode in site.areas.items():
             if rid not in region_ids or mode not in MODES: add('sites', site, 'area:' + rid, tr('区域服务原则无效'))
     return errors
+
+
+def binding_addresses(values, *, allow_empty=False):
+    result = []
+    for line, value in enumerate(values, 1):
+        value = value.strip()
+        if not value: continue
+        try:
+            address = ip_address(value)
+            if address.is_multicast or '%' in value: raise ValueError()
+            if address.version == 6 and address.ipv4_mapped is not None:
+                address = address.ipv4_mapped
+            if address.is_multicast: raise ValueError()
+        except ValueError:
+            raise ValueError(tr('第 {0} 行不是有效的绑定 IP 地址', line)) from None
+        canonical = str(address)
+        if canonical not in result: result.append(canonical)
+    if not result and not allow_empty: raise ValueError(tr('启用区域时至少填写一个绑定地址'))
+    return result
 
 
 def ssh_ip(value):

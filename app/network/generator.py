@@ -1,8 +1,9 @@
 """Generate complete node JSON and ephemeral TLS material from one snapshot."""
 from ..i18n import tr
 import json
+from ipaddress import ip_address
 from urllib.parse import urlsplit
-from .models import Listen, canonical_domain, configuration_errors, relay_endpoint, RELAY_SERVER_NAME
+from .models import Listen, canonical_domain, configuration_errors, relay_endpoint, RELAY_SERVER_NAME, binding_addresses
 
 
 def address(host, port): return f'[{host}]:{port}' if ':' in host else f'{host}:{port}'
@@ -33,7 +34,7 @@ def generate(config, certificates, version, public_materials=None):
         for rid, area in node.areas.items():
             if area.enabled:
                 identity = f'relay-{node.id}-{rid}'
-                add_material(shared, identity, certificates.leaf('relay', 'relay-'+node.id, dns=RELAY_SERVER_NAME, ip=area.ip), 'relay')
+                add_material(shared, identity, certificates.leaf('relay', 'relay-'+node.id, dns=RELAY_SERVER_NAME, ips=[ip for ip in binding_addresses(area.ips) if not ip_address(ip).is_unspecified]), 'relay')
         if node.upstream_url:
             add_material(shared,'node-'+node.id,certificates.leaf('relay','node-'+node.id,client=True),'relay')
     for i, cert in enumerate(certificates.enabled_certificates()): shared[f'client-{i}.pem'] = cert
@@ -77,7 +78,7 @@ def generate(config, certificates, version, public_materials=None):
             if not area.enabled: continue
             ports=[area.overrides[i] or region.ports[i] for i in range(3)]
             def server(kind, port, routes, policies=None, strict=True):
-                entry={'listen':[address(area.ip,port)],'routes':routes+[route(None,deny())],
+                entry={'listen':[f'tcp{ip_address(ip).version}/'+address(ip,port) for ip in binding_addresses(area.ips)],'routes':routes+[route(None,deny())],
                        'automatic_https':{'disable':True},'protocols':['h1','h2'],'strict_sni_host':strict}
                 if policies is not None: entry['tls_connection_policies']=policies
                 servers[region.id+'-'+kind]=entry

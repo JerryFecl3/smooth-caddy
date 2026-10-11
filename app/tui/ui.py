@@ -351,7 +351,8 @@ class Terminal(App, inherit_bindings=False):
                 return tr('关闭')
             region = self.demo.find('regions', rid)
             ports = [a.overrides[i] if a.overrides[i] is not None else region.ports[i] for i in range(2)]
-            return f"{a.ip or tr('未填写 IP')} : {ports[0]}/{ports[1]}"
+            addresses = (a.ips[0] + (f' (+{len(a.ips)-1})' if len(a.ips) > 1 else '')) if a.ips else tr('未填写 IP')
+            return f"{addresses} : {ports[0]}/{ports[1]}"
         return str(getattr(obj, key)) or tr('未填写')
 
     def current(self):

@@ -32,13 +32,14 @@ class RelayMigrationTests(unittest.TestCase):
             cfg=app.snapshot()
             for node in cfg.nodes:
                 node.platform='debian_13';node.arch='amd64';node.ssh_hops=[['192.0.2.1']]
-            cfg.nodes[0].areas[rid]=Listen(True,'2001:db8::1',[None,None,'9443'])
+            cfg.nodes[0].areas[rid]=Listen(True,['2001:db8::1'],[None,None,'9443'])
             cfg.nodes[1].upstream_url='https://[2001:db8::1]:9443'
             app.save_configuration(cfg)
             batch=app.releases.create();folder=app.releases.directory(batch)
             metadata=json.loads((folder/'metadata.json').read_bytes())
             value=metadata['configuration']
             for index,node in enumerate(value['nodes']):
+                for area in node['areas'].values(): area['ip'] = area.pop('ips')[0]
                 node.pop('upstream_url');node['mode']='via_upstream' if index else 'direct'
                 node['upstream']=[cfg.nodes[0].id,rid] if index else None
             original=deepcopy(value)
@@ -59,7 +60,7 @@ class RelayMigrationTests(unittest.TestCase):
             app.store.db.execute('PRAGMA user_version=4')
             with closing(Application(directory)) as upgraded:
                 self.assertEqual(upgraded.snapshot().nodes[1].upstream_url,converted.nodes[1].upstream_url)
-                self.assertEqual(upgraded.store.db.execute('PRAGMA user_version').fetchone()[0],5)
+                self.assertEqual(upgraded.store.db.execute('PRAGMA user_version').fetchone()[0],6)
             backup=next((Path(directory)/'backups').glob('smooth-caddy-v4-*.db'))
             with closing(sqlite3.connect(backup)) as db:
                 self.assertEqual(json.loads(db.execute('SELECT payload FROM configuration').fetchone()[0]),original)
@@ -88,7 +89,8 @@ class CaddyRelayTests(unittest.TestCase):
             cfg=app.snapshot()
             for node in cfg.nodes:
                 node.platform='debian_13';node.arch='amd64';node.ssh_hops=[['127.0.0.1']]
-                node.areas[rid]=Listen(True,'127.0.0.1',[port(),port(),port()])
+                node.areas[rid]=Listen(True,['127.0.0.1'],[port(),port(),port()])
+            cfg.nodes[0].areas[rid].ips=['0.0.0.0','::']
             relay_port=int(cfg.nodes[1].areas[rid].overrides[2])
             cfg.nodes[0].upstream_url=f'https://127.0.0.1:{relay_port}'
             for i,site in enumerate(cfg.sites):
@@ -118,13 +120,14 @@ class CaddyRelayTests(unittest.TestCase):
                         except OSError:
                             if time.monotonic()>deadline:raise
                             time.sleep(.05)
-                conn=http.client.HTTPConnection('127.0.0.1',int(cfg.nodes[0].areas[rid].overrides[0]),timeout=3)
-                try:
-                    conn.request('GET','/check?q=1',headers={'Host':'web.test:18443'})
-                    response=conn.getresponse();body=response.read()
-                    self.assertEqual(response.status,200,body)
-                    self.assertEqual(body,b'web.test:18443/check?q=1')
-                finally:conn.close()
+                for host in ('127.0.0.1','::1'):
+                    conn=http.client.HTTPConnection(host,int(cfg.nodes[0].areas[rid].overrides[0]),timeout=3)
+                    try:
+                        conn.request('GET','/check?q=1',headers={'Host':'web.test:18443'})
+                        response=conn.getresponse();body=response.read()
+                        self.assertEqual(response.status,200,body)
+                        self.assertEqual(body,b'web.test:18443/check?q=1')
+                    finally:conn.close()
                 # A valid client not represented by any configured node is accepted.
                 external=app.certificates.leaf('relay','Unlisted relay client',client=True)
                 user=app.certificates.leaf('client','User',client=True)

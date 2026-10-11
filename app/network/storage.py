@@ -34,7 +34,7 @@ class Store:
             with self.transaction():
                 version = self.db.execute('PRAGMA user_version').fetchone()[0]
                 if identity == APPLICATION_ID:
-                    if version in (2, 3, 4):
+                    if version in (2, 3, 4, 5):
                         migrate_database(self.db, self.path, version)
                     elif version > DATABASE_VERSION:
                         raise ValueError(tr('数据库版本较新，请升级程序；不会写入'))

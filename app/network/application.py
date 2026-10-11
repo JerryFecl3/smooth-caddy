@@ -39,13 +39,13 @@ class Application:
             private, public, router = (uuid4().hex for _ in range(3))
             config.regions = [Region(private, 'Private'), Region(public, 'Public')]
             config.nodes = [Node(router, 'HomeRouter',
-                areas={private: Listen(True, '192.168.1.1')},
+                areas={private: Listen(True,['192.168.1.1'])},
                 platform='openwrt_25_12', arch='armv7', ssh_hops=[['192.168.1.1']])]
             for index, arch in ((1, 'amd64'), (2, 'arm64')):
                 ip = f'192.168.100.{100 + index}'
                 config.nodes.append(Node(uuid4().hex, f'CloudServer{index}',
                     upstream_url='https://192.168.1.1:8443',
-                    areas={private: Listen(True, ip), public: Listen(True, '192.168.8.100')},
+                    areas={private: Listen(True, [ip]), public: Listen(True,['192.168.8.100'])},
                     platform='debian_13', arch=arch, ssh_hops=[['192.168.1.1'], [ip]]))
             config.sites = [
                 Site(uuid4().hex, 'Blog', 'blog.myabc.com', 'http://192.168.1.50:80',

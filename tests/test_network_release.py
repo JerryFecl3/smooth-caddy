@@ -24,7 +24,7 @@ class ReleaseTests(unittest.TestCase):
         cfg=app.snapshot()
         for i,node in enumerate(cfg.nodes):
             node.platform='debian_13' if i==0 else 'openwrt_25_12'
-            node.arch='amd64';node.ssh_hops=[['127.0.0.'+str(i+2)]];node.areas[rid]=Listen(True,'127.0.0.'+str(i+2))
+            node.arch='amd64';node.ssh_hops=[['127.0.0.'+str(i+2)]];node.areas[rid]=Listen(True,['127.0.0.'+str(i+2)])
         cfg.nodes[1].upstream_url='https://127.0.0.2:8443'
         cfg.sites[0].domain='example.test';cfg.sites[0].source='http://127.0.0.1:9000';cfg.sites[0].areas[rid]='https_mtls'
         cfg.nodes[1].ssh_hops=cfg.nodes[0].ssh_hops+cfg.nodes[1].ssh_hops
@@ -47,7 +47,7 @@ class ReleaseTests(unittest.TestCase):
         batch = self.app.releases.create()
         directory = self.app.releases.directory(batch)
         metadata = json.loads((directory/'metadata.json').read_bytes())
-        self.assertEqual(metadata['format'], 4)
+        self.assertEqual(metadata['format'], 5)
         expected, materials = self.app.releases.load(batch)
         # Reconstruct the v1 metadata persisted by released versions.
         self.legacy_nodes(metadata['configuration'])
@@ -103,6 +103,7 @@ class ReleaseTests(unittest.TestCase):
     def legacy_nodes(value):
         parent=value['nodes'][0]['id'];rid=value['regions'][0]['id']
         for index,node in enumerate(value['nodes']):
+            for area in node['areas'].values(): area['ip'] = area.pop('ips')[0]
             node.pop('upstream_url')
             node['mode']='via_upstream' if index else 'direct'
             node['upstream']=[parent,rid] if index else None

@@ -76,7 +76,7 @@ class Form(ModalScreen):
         if not any(f.key == 'enabled' for f in self.fields):
             return
         enabled = self.query_one('#enabled', Checkbox).value
-        self.query_one('#ip', Input).disabled = not enabled
+        self.query_one('#ips', TextArea).disabled = not enabled
         for i in range(3):
             check = self.query_one(f'#override{i}', Checkbox)
             check.disabled = not enabled

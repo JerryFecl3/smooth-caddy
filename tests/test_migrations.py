@@ -59,7 +59,7 @@ class MigrationTests(unittest.TestCase):
             self.assertNotIn('upstream', config.to_dict()['nodes'][1])
             self.assertFalse(config.verify_origin_https)
             self.assertEqual(config.revision, 8)
-            self.assertEqual(store.db.execute('PRAGMA user_version').fetchone()[0], 5)
+            self.assertEqual(store.db.execute('PRAGMA user_version').fetchone()[0], 6)
             self.assertEqual(store.db.execute('SELECT value FROM secrets').fetchone()[0], b'unchanged-encrypted-bytes')
         finally:
             store.close()
