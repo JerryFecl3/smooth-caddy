@@ -1,3 +1,4 @@
+from app.network.models import Service, service_policy
 import tempfile
 import unittest
 from cryptography import x509
@@ -31,7 +32,12 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual([n.name for n in config.nodes],['HomeRouter','CloudServer1','CloudServer2'])
                     self.assertEqual([n.arch for n in config.nodes],['armv7','amd64','arm64'])
                     self.assertEqual([s.name for s in config.sites],['Blog','Dashboard'])
-                    self.assertEqual(config.sites[1].tls_source,'public_ca')
+                    self.assertEqual([(r.tls_source,r.mtls) for r in config.regions],
+                                     [('private_ca',False),('private_ca',True)])
+                    for site in config.sites:
+                        for region in config.regions:
+                            self.assertEqual(site.areas[region.id],Service(True))
+                            self.assertEqual(service_policy(site,region),Service(True,'private_ca',region.mtls))
                     self.assertEqual(config.nodes[1].upstream_url,'https://192.168.1.1:8443')
                     for role,suffix in [('root','Root CA'),('tls','TLS CA'),('client','mTLS CA'),('relay','Relay CA')]:
                         cert=x509.load_pem_x509_certificate(app.certificates.public(role))

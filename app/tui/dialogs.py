@@ -7,8 +7,9 @@ from textual import on
 from textual.binding import Binding
 from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Label, Static, TextArea
+from textual.widgets import Label, Static, TextArea, RadioSet, RadioButton
 from .widgets import Button, Checkbox, Input, Select
+from .choice_row import ChoiceRow
 
 @dataclass
 class Field:
@@ -21,6 +22,7 @@ class Field:
     readonly: bool = False
     placeholder: str = ''
     multiline: bool = False
+    radio: bool = False
 
 class Form(ModalScreen):
     BINDINGS = [Binding('escape', 'cancel', tr('取消')), Binding('ctrl+s', 'save', tr('确认')), Binding('ctrl+y', 'confirm_danger', tr('确认危险操作')), Binding('enter', 'danger_enter', '', priority=True, show=False)]
@@ -35,38 +37,43 @@ class Form(ModalScreen):
             yield Static(self.caption, id='dialog-title', markup=False)
             yield Static(self.note, id='dialog-note', markup=False)
             with VerticalScroll(id='form-fields'):
-                for f in self.fields:
-                    if f.key.startswith('port') and any(x.key == 'enabled' for x in self.fields):
-                        continue
-                    if f.key.startswith('override'):
-                        port = next(x for x in self.fields if x.key == 'port' + f.key[-1])
-                        with Horizontal(classes='port-row'):
-                            yield Checkbox(f.label, bool(f.value), id=f.key)
-                            yield Input(str(port.value), id=port.key)
-                    elif f.boolean:
-                        yield Checkbox(f.label, bool(f.value), id=f.key)
-                    else:
-                        yield Label(f.label)
-                        if f.multiline:
-                            yield TextArea(str(f.value), id=f.key, soft_wrap=False, tab_behavior='focus', classes='ssh-path-input')
-                        elif f.readonly:
-                            yield Static(str(f.value), id=f.key, markup=False)
-                        elif f.choices is not None:
-                            yield Select(f.choices, value=f.value, allow_blank=False, id=f.key)
-                        else:
-                            yield Input(str(f.value), password=f.secret, placeholder=f.placeholder, id=f.key)
+                yield from self.compose_fields()
             yield Static('', id='form-error', markup=False)
             with Horizontal(classes='dialog-actions'):
                 yield from self.compose_actions()
 
+    def compose_fields(self):
+        for f in self.fields:
+            if f.key.startswith('port') and any(x.key=='override'+f.key[4:] for x in self.fields):continue
+            if f.key.startswith('override'):
+                port=next(x for x in self.fields if x.key=='port'+f.key[8:])
+                with Horizontal(classes='port-row'):
+                    yield Checkbox(f.label,bool(f.value),id=f.key)
+                    yield Input(str(port.value),id=port.key)
+            elif f.boolean:
+                with Horizontal(classes='choice-row'):
+                    yield Checkbox(f.label,bool(f.value),id=f.key)
+            else:
+                yield Label(f.label)
+                if f.multiline:
+                    yield TextArea(str(f.value), id=f.key, soft_wrap=False, tab_behavior='focus', classes='ssh-path-input')
+                elif f.readonly:
+                    yield Static(str(f.value), id=f.key, markup=False)
+                elif f.choices is not None and f.radio:
+                    yield ChoiceRow(f.choices,f.value,id=f.key)
+                elif f.choices is not None:
+                    yield Select(f.choices, value=f.value, allow_blank=False, id=f.key)
+                else:
+                    yield Input(str(f.value), password=f.secret, placeholder=f.placeholder, id=f.key)
+
     def compose_actions(self):
         yield Button(tr('返回 · Esc'), id='cancel')
         if not self.return_only:
-            yield Button(tr('确认 · ^y') if self.confirm else (tr('保存 · ^s') if self.fields else tr('确认 · ^s')), id='save', variant='error' if self.confirm else 'primary')
+            yield Button(tr('确认 · ^y') if self.confirm else (tr('保存 · ^s') if self.fields else tr('确认 · ^s')), id='save', variant='error' if self.confirm else 'default')
 
     def on_mount(self):
         self.query_one('#dialog-note').display = bool(self.note)
-        controls = list(self.query('Input, Select, Checkbox, TextArea'))
+        controls = list(self.query('Input, Select, Checkbox, TextArea, RadioSet'))
         self.set_focus(controls[0] if controls else self.query_one('#cancel' if self.return_only else '#save'))
         if len(self.fields) == 1 and controls and isinstance(controls[0], Input):
             controls[0].action_select_all()
@@ -76,11 +83,11 @@ class Form(ModalScreen):
         if not any(f.key == 'enabled' for f in self.fields):
             return
         enabled = self.query_one('#enabled', Checkbox).value
-        self.query_one('#ips', TextArea).disabled = not enabled
-        for i in range(3):
-            check = self.query_one(f'#override{i}', Checkbox)
-            check.disabled = not enabled
-            self.query_one(f'#port{i}', Input).disabled = not enabled or not check.value
+        for field in self.fields:
+            if field.key!='enabled':self.query_one('#'+field.key).disabled=not enabled
+        for field in self.fields:
+            if field.key.startswith('override'):
+                self.query_one('#port'+field.key[8:]).disabled=not enabled or not self.query_one('#'+field.key,Checkbox).value
 
     @on(Checkbox.Changed)
     @on(Select.Changed)
@@ -122,6 +129,9 @@ class Form(ModalScreen):
                 values[f.key] = f.value
                 continue
             control = self.query_one('#' + f.key)
+            if isinstance(control,RadioSet):
+                values[f.key]=f.choices[control.pressed_index][1] if control.pressed_index>=0 else f.value
+                continue
             if isinstance(control, TextArea):
                 values[f.key] = control.text
                 continue
@@ -220,7 +230,7 @@ class InitializationDialog(Form):
 
     def compose_actions(self):
         yield Button(tr('退出 · Esc'), id='cancel')
-        yield Button(tr('保存 · ^s'), id='save', variant='primary')
+        yield Button(tr('保存 · ^s'), id='save')
 
     def on_mount(self):
         super().on_mount()

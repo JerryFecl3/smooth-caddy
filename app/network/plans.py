@@ -28,7 +28,7 @@ class TaskPlan:
 
 
 def generation_plan(config):
-    return TaskPlan.group(tr('生成配置批次'),[('generate',tr('生成证书与配置')),*[(f'save:{n.id}',tr('保存配置 / ')+n.name) for n in config.nodes],('metadata',tr('写入 metadata'))])
+    return TaskPlan.group(tr('准备运行材料'),[('generate',tr('生成证书与配置'))])
 
 
 def assembly_plan(config):

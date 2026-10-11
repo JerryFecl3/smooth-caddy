@@ -34,7 +34,7 @@ class Store:
             with self.transaction():
                 version = self.db.execute('PRAGMA user_version').fetchone()[0]
                 if identity == APPLICATION_ID:
-                    if version in (2, 3, 4, 5):
+                    if version in (2, 3, 4, 5, 6, 7, 8, 9):
                         migrate_database(self.db, self.path, version)
                     elif version > DATABASE_VERSION:
                         raise ValueError(tr('数据库版本较新，请升级程序；不会写入'))
@@ -43,6 +43,8 @@ class Store:
                 self.db.execute(f'PRAGMA application_id={APPLICATION_ID}')
                 self.db.execute(f'PRAGMA user_version={DATABASE_VERSION}')
                 self.db.execute('CREATE TABLE IF NOT EXISTS configuration (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL, payload TEXT NOT NULL)')
+                self.db.execute('CREATE TABLE IF NOT EXISTS archive_sources (source TEXT PRIMARY KEY)')
+                self.db.execute('CREATE TABLE IF NOT EXISTS settings_archives (id TEXT PRIMARY KEY, payload TEXT NOT NULL, source TEXT UNIQUE)')
                 self.db.execute('CREATE TABLE IF NOT EXISTS authorities (role TEXT PRIMARY KEY, name TEXT NOT NULL, cert BLOB NOT NULL, key BLOB NOT NULL)')
                 self.db.execute('CREATE TABLE IF NOT EXISTS clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE, enabled INTEGER NOT NULL, cert BLOB NOT NULL, key BLOB NOT NULL)')
                 self.db.execute('CREATE TABLE IF NOT EXISTS secrets (name TEXT PRIMARY KEY, value BLOB NOT NULL)')

@@ -1,3 +1,4 @@
+from tests.legacy_batches import legacy_batch
 import io
 import json
 from pathlib import Path
@@ -7,7 +8,7 @@ from unittest.mock import patch
 import tempfile
 import unittest
 from app.network.application import Application
-from app.network.models import Listen
+from app.network.models import Service, service_policy, Listen
 from app.network.generator import generate
 
 class ReleaseTests(unittest.TestCase):
@@ -26,7 +27,7 @@ class ReleaseTests(unittest.TestCase):
             node.platform='debian_13' if i==0 else 'openwrt_25_12'
             node.arch='amd64';node.ssh_hops=[['127.0.0.'+str(i+2)]];node.areas[rid]=Listen(True,['127.0.0.'+str(i+2)])
         cfg.nodes[1].upstream_url='https://127.0.0.2:8443'
-        cfg.sites[0].domain='example.test';cfg.sites[0].source='http://127.0.0.1:9000';cfg.sites[0].areas[rid]='https_mtls'
+        cfg.sites[0].domain='example.test';cfg.sites[0].source='http://127.0.0.1:9000';cfg.sites[0].areas[rid]=Service(True,mtls=True)
         cfg.nodes[1].ssh_hops=cfg.nodes[0].ssh_hops+cfg.nodes[1].ssh_hops
         app.save_configuration(cfg);app.certificates.initialize('Network')
         return app.snapshot(),rid,parent,child
@@ -36,15 +37,15 @@ class ReleaseTests(unittest.TestCase):
         from app.network.task_progress import TaskCancelled
         self.configured();cancel=threading.Event()
         def step(event):
-            if event.index==1:cancel.set()
-        with self.assertRaises(TaskCancelled):self.app.releases.create(task_progress=step,cancel=cancel)
+            if event.index==0:cancel.set()
+        with self.assertRaises(TaskCancelled):self.app.releases.prepare(task_progress=step,cancel=cancel)
         self.assertEqual(self.app.releases.list(),[])
         self.assertFalse(list(self.app.releases.root.glob('.prepare-*')))
 
     def test_legacy_batch_load_and_package_preserve_original_files(self):
         from app.network.releases import sha
         self.configured()
-        batch = self.app.releases.create()
+        batch = legacy_batch(self.app)
         directory = self.app.releases.directory(batch)
         metadata = json.loads((directory/'metadata.json').read_bytes())
         self.assertEqual(metadata['format'], 5)
@@ -70,9 +71,8 @@ class ReleaseTests(unittest.TestCase):
         loaded, loaded_materials = self.app.releases.load(self.app.releases.list()[0])
         self.assertEqual(loaded.to_dict(), expected.to_dict())
         self.assertEqual(loaded_materials, materials)
-        packages = self.app.releases.assemble(batch, 'v2.11.7', set(), destination='tasks')
-        self.app.releases.check_packages(packages)
-        self.assertEqual([p.platform for p in packages.packages], ['debian_13','openwrt_25_12'])
+        with self.assertRaisesRegex(ValueError,'当前设置'):
+            self.app.releases.assemble(batch, 'v2.11.7', set(), destination='tasks')
         self.assertEqual((self.app.releases.root/'index.json').read_bytes(), index)
         self.assertEqual({p.relative_to(directory):p.read_bytes() for p in directory.rglob('*') if p.is_file()}, before)
         (directory/'metadata.json').write_bytes(payload + b' ')
@@ -82,7 +82,7 @@ class ReleaseTests(unittest.TestCase):
     def test_metadata_v2_expands_ssh_without_rewriting_batch(self):
         from app.network.releases import sha
         self.configured()
-        batch=self.app.releases.create();directory=self.app.releases.directory(batch)
+        batch=legacy_batch(self.app);directory=self.app.releases.directory(batch)
         metadata=json.loads((directory/'metadata.json').read_bytes())
         self.legacy_nodes(metadata['configuration'])
         metadata['format']=2
@@ -142,14 +142,14 @@ class ReleaseTests(unittest.TestCase):
 
     def test_https_plaintext_redirect_preserves_http_and_mtls_rules(self):
         cfg,rid,parent,child=self.configured()
-        from app.network.models import Site
-        cfg.sites.append(Site('http-site', 'Plain HTTP', 'plain.test', 'http://127.0.0.1:9000', {rid:'http'}))
+        from app.network.models import Service, service_policy, Site
+        cfg.sites.append(Site('http-site', 'Plain HTTP', 'plain.test', 'http://127.0.0.1:9000', {rid:Service(True)}))
         for mode in ('https', 'https_mtls'):
             for port in ('443', '9443'):
                 with self.subTest(mode=mode, port=port):
-                    cfg.sites[0].areas[rid]=mode
+                    cfg.sites[0].areas[rid]=Service(True,mtls=mode=='https_mtls')
                     for node in cfg.nodes:
-                        node.areas[rid].overrides[1]=port
+                        node.areas[rid].ports[1]=port
                     result=generate(cfg,self.app.certificates,'20261008-120000')
                     for node in cfg.nodes:
                         servers=json.loads(result[node.id]['caddy.json'])['apps']['http']['servers']
@@ -157,24 +157,17 @@ class ReleaseTests(unittest.TestCase):
                         self.assertEqual(https['listener_wrappers'], [{'wrapper':'http_redirect'}, {'wrapper':'tls'}])
                         self.assertEqual('client_authentication' in https['tls_connection_policies'][0], mode=='https_mtls')
                         self.assertNotIn('listener_wrappers', servers[rid+'-relay'])
-                        http=servers[rid+'-http']
+                        http=servers['http-0']
                         self.assertNotIn('listener_wrappers', http)
                         redirect=http['routes'][0]['handle'][0]
                         self.assertEqual(redirect['status_code'], 308)
                         self.assertEqual(redirect['headers']['Location'],
                                          ['https://example.test'+(':'+port if port!='443' else '')+'{http.request.uri}'])
-                        self.assertEqual(http['routes'][1]['handle'][0]['handler'], 'reverse_proxy')
-        cfg.sites[0].areas[rid]='http'
-        result=generate(cfg,self.app.certificates,'20261008-120000')
-        for node in cfg.nodes:
-            servers=json.loads(result[node.id]['caddy.json'])['apps']['http']['servers']
-            self.assertNotIn(rid+'-https', servers)
-            self.assertTrue(all('listener_wrappers' not in server for server in servers.values()))
-
+                        self.assertEqual(http['routes'][1]['handle'][0]['status_code'],308)
     def test_offline_package_index_and_integrity(self):
         cfg, *_=self.configured()
         with patch('app.network.releases.fetch',side_effect=AssertionError('offline')):
-            batch=self.app.releases.create()
+            batch=self.app.releases.prepare()
             release=self.app.releases.assemble(batch,'v2.11.7',set(),destination='tasks')
         self.assertEqual(len(release.packages),2)
         self.app.releases.check_packages(release)
@@ -190,24 +183,24 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(checked.returncode,0,checked.stderr)
         package=(self.app.releases.directory(release)/release.packages[0].filename)
         package.write_bytes(b'broken')
-        self.assertEqual(self.app.releases.list()[0].version,release.version)
+        self.assertEqual(self.app.releases.list(),[])
         with self.assertRaises(ValueError):self.app.releases.check_packages(release)
-        self.app.releases.delete(release.version)
+        self.app.releases.cleanup(release)
         self.assertEqual(self.app.releases.list(),[])
 
     def test_export_failure_does_not_publish_partial_batch(self):
         self.configured()
         with patch('app.network.releases.generate',side_effect=OSError('disk full')):
-            with self.assertRaises(OSError):self.app.releases.create()
+            with self.assertRaises(OSError):self.app.releases.prepare()
         self.assertEqual(self.app.releases.list(),[])
         self.assertEqual(list(self.app.releases.root.glob('.prepare-*')),[])
 
 
-    def test_global_origin_tls_option_leaves_relay_verification_intact(self):
+    def test_site_origin_tls_option_leaves_relay_verification_intact(self):
         cfg, rid, parent, child = self.configured()
         cfg.sites[0].source = 'https://10.10.10.251:8006'
         for verify in (True, False):
-            cfg.verify_origin_https = verify
+            cfg.sites[0].verify_origin_https = verify
             result = generate(cfg, self.app.certificates, '20261008-120000')
             def transport(node):
                 return json.loads(result[node]['caddy.json'])['apps']['http']['servers'][rid+'-relay']['routes'][0]['handle'][0]['transport']
@@ -224,7 +217,7 @@ class ReleaseTests(unittest.TestCase):
     def test_release_survives_move(self):
         import shutil
         self.configured()
-        release=self.app.releases.create()
+        release=legacy_batch(self.app)
         self.assertEqual(release.directory,'releases/'+release.version)
         root=self.app.releases.directory(release)
         with tempfile.TemporaryDirectory() as target:

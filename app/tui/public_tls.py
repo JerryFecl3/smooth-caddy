@@ -34,6 +34,7 @@ class PublicTLSPage:
         for item in self.records:table.add_row(item['domain'],tr('是') if item['wildcard'] else tr('否'),self.service.state(item),item['expires'][:10] or '—',mode,key=item['id'])
         table.move_cursor(row=min(row,max(0,len(self.records)-1)))
         for name in ('pub-details','delete','pub-all'):self.app.query_one('#'+name).disabled=not self.records
+        self.app.call_after_refresh(self.app.refresh_button_focus)
 
     def selected(self):
         row=self.app.query_one('#matrix',DataTable).cursor_row
@@ -117,7 +118,7 @@ class CertificateDetails(Form):
     def compose_actions(self):
         yield Button(tr('返回 · Esc'),id='cancel')
         yield Button(tr('编辑 · ^o'),id='cert-edit')
-        yield Button(tr('申请 · ^s'),id='cert-issue',variant='primary')
+        yield Button(tr('申请 · ^s'),id='cert-issue')
         if self.item['certificate']:yield Button(tr('强制申请'),id='cert-force')
     @on(Button.Pressed,'#cert-edit')
     def action_edit(self):self.dismiss('edit')
@@ -135,7 +136,7 @@ class LegoManager(Form):
     def compose_actions(self):
         yield Button(tr('返回 · Esc'),id='cancel')
         yield Button(tr('检查更新'),id='lego-check')
-        yield Button(tr('下载 / 更新 · ^s'),id='lego-install',disabled=True,variant='primary')
+        yield Button(tr('下载 / 更新 · ^s'),id='lego-install',disabled=True)
     def on_mount(self):
         super().on_mount()
         try:self.local=self.app.application.public_tls.tool.version()

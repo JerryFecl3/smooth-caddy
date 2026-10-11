@@ -22,10 +22,10 @@ class Select(TextualSelect, inherit_bindings=False):
     ]
 
     def action_previous_control(self):
-        self.screen.focus_previous('Input, Select, Checkbox, Button, DataTable')
+        self.screen.focus_previous('Input, TextArea, Select, Checkbox, RadioSet, Button, DataTable')
 
     def action_next_control(self):
-        self.screen.focus_next('Input, Select, Checkbox, Button, DataTable')
+        self.screen.focus_next('Input, TextArea, Select, Checkbox, RadioSet, Button, DataTable')
 
 
 class Button(TextualButton):
@@ -62,9 +62,13 @@ class Button(TextualButton):
 
     def move_focus(self, direction, buttons_only=False):
         if isinstance(self.screen, ModalScreen):
-            selector = 'Button' if buttons_only else 'Input, Select, Checkbox, Button, DataTable'
+            selector = 'Button' if buttons_only else 'Input, TextArea, Select, Checkbox, RadioSet, Button, DataTable'
         elif any(parent.id == 'sidebar' for parent in self.ancestors):
             selector = '#sidebar Button, #nav'
+        elif any(parent.id == 'settings-tabs' for parent in self.ancestors):
+            selector = '#settings-tabs Button'
+        elif any(parent.id == 'archive-actions' for parent in self.ancestors):
+            selector = '#archive-actions Button'
         else:
             selector = '#actions Button'
         if direction < 0:
@@ -82,10 +86,10 @@ class Input(TextualInput):
     ]
 
     def action_previous_control(self):
-        self.screen.focus_previous('Input, Select, Checkbox, Button, DataTable')
+        self.screen.focus_previous('Input, TextArea, Select, Checkbox, RadioSet, Button, DataTable')
 
     def action_next_control(self):
-        self.screen.focus_next('Input, Select, Checkbox, Button, DataTable')
+        self.screen.focus_next('Input, TextArea, Select, Checkbox, RadioSet, Button, DataTable')
 
 
 class Checkbox(TextualCheckbox):
@@ -101,10 +105,10 @@ class Checkbox(TextualCheckbox):
         return Content.assemble(('[x]' if self.value else '[ ]', self.get_visual_style('toggle--button')))
 
     def action_previous_control(self):
-        self.screen.focus_previous('Input, Select, Checkbox, Button, DataTable')
+        self.screen.focus_previous('Input, TextArea, Select, Checkbox, RadioSet, Button, DataTable')
 
     def action_next_control(self):
-        self.screen.focus_next('Input, Select, Checkbox, Button, DataTable')
+        self.screen.focus_next('Input, TextArea, Select, Checkbox, RadioSet, Button, DataTable')
 
 
 class ListView(TextualListView):

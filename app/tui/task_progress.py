@@ -178,7 +178,6 @@ class TaskProgress(ModalScreen):
         self.query_one('#task-overall',ProgressBar).update(total=total or None,progress=completed)
         self.query_one('#task-current').display=False
         self.query_one('#task-bytes',Static).update('')
-        if outcome in ('failed','stopped') and getattr(self,'batch_record',None):message=tr('配置批次：')+self.batch_record.version+'\n'+message
         self.query_one('#task-detail',Static).update(message)
         self.query_one('#task-detail').display=bool(message)
         self.query_one('#task-detail').set_class(self.failed,'task-error')
@@ -217,13 +216,14 @@ class TaskProgress(ModalScreen):
 
 class DeploymentProgress(TaskProgress):
     stop_title=tr('停止部署？')
-    stop_note=tr('保留配置批次，停止后续工作。已提交的部署等待结果，不自动回滚。')
+    stop_note=tr('停止后续工作并清理本机临时材料。已提交的部署等待结果，不自动回滚。')
 
-    def __init__(self,batch,version):
+    def __init__(self,batch,version,node_ids=None):
+        self.node_ids=node_ids
         self.batch_record=batch
         self.version=version
         self.decision=None
-        super().__init__(tr('部署配置批次') if batch else tr('新增并部署'),self.perform_deployment,self.describe,
+        super().__init__(tr('部署当前设置'),self.perform_deployment,self.describe,
                          asynchronous=True,success_title=tr('部署完成'))
 
     def extra_buttons(self):return [Button(tr('跳过'),id='task-skip')]
@@ -273,4 +273,4 @@ class DeploymentProgress(TaskProgress):
             return answer
         def created(batch):
             self.batch_record=batch
-        return await self.app.application.deployment.execute(self.batch_record,self.version,confirm,decide,progress,steps,cancel,created)
+        return await self.app.application.deployment.execute(None,self.version,confirm,decide,progress,steps,cancel,created,node_ids=self.node_ids)

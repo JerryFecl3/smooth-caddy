@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 import asyncssh
 from app.network.application import Application
-from app.network.models import Configuration, Node, parse_ssh_path, ssh_route, configuration_errors
+from app.network.models import Service, service_policy, Configuration, Node, parse_ssh_path, ssh_route, configuration_errors
 from app.network.migrations import configuration_v3
 from app.network.storage import Store
 from tests.ui_helpers import ReadyTerminal
@@ -43,6 +43,7 @@ class SSHPathTests(unittest.TestCase):
                 app.security.setup('secret')
                 parent=app.create('nodes','Parent');child=app.create('nodes','Child')
                 payload=app.snapshot().to_dict()
+                payload['verify_origin_https']=True
                 for index,node in enumerate(payload['nodes']):
                     node.pop('ssh_hops');node.pop('upstream_url');node['ssh_ip']=f'192.0.2.{index+1}'
                     node['mode']='via_upstream' if index else 'direct'
@@ -55,7 +56,7 @@ class SSHPathTests(unittest.TestCase):
                 cfg=store.load()
                 self.assertEqual(cfg.nodes[1].ssh_hops,[['192.0.2.1'],['192.0.2.2']])
                 self.assertEqual(cfg.revision,original['revision']+1)
-                self.assertEqual(store.db.execute('PRAGMA user_version').fetchone()[0],6)
+                self.assertEqual(store.db.execute('PRAGMA user_version').fetchone()[0],10)
                 self.assertEqual(store.db.execute('SELECT key FROM hosts').fetchone()[0],b'old-trust')
                 self.assertEqual(store.db.execute('SELECT count(*) FROM ssh_hosts').fetchone()[0],0)
             backup=next((Path(directory)/'backups').glob('smooth-caddy-v3-*.db'))
@@ -134,7 +135,7 @@ class SSHPathUITests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(len(ui.screen_stack),2)
                 await pilot.press('ctrl+s');await pilot.pause()
                 self.assertEqual(len(ui.screen_stack),1)
-                self.assertEqual(ui.cell_value(app.snapshot().nodes[0],'ssh_hops'),'2001:db8::1 (+2)')
+                self.assertEqual(ui.cell_value(app.snapshot().nodes[0],'ssh_hops'),'[2001:db8::1]\n(经2个地址跳转)')
                 await pilot.press('enter');await pilot.pause()
                 ui.screen.query_one('#value',TextArea).load_text('192.0.2.99')
                 await pilot.press('escape');await pilot.pause()

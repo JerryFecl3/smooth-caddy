@@ -2,9 +2,10 @@ import tempfile
 import unittest
 from contextlib import closing
 from app.network.application import Application
-from app.network.models import relay_endpoint
+from app.network.models import Service, service_policy, relay_endpoint
 from tests.ui_helpers import ReadyTerminal
 from app.tui.widgets import Input
+from app.tui.choice_row import ChoiceRow
 
 class NodeUpstreamTests(unittest.IsolatedAsyncioTestCase):
     async def test_flat_list_free_address_and_clearing(self):
@@ -19,6 +20,7 @@ class NodeUpstreamTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(ui.row_ids,[a,b])
                 table=ui.query_one('#matrix');table.move_cursor(row=1,column=ui.col_keys.index('upstream_url'))
                 await pilot.press('enter');await pilot.pause()
+                ui.screen.query_one('#mode',ChoiceRow).value=True;await pilot.pause()
                 ui.screen.query_one('#value',Input).value='http://relay.test:8443'
                 await pilot.press('ctrl+s');await pilot.pause()
                 self.assertEqual(len(ui.screen_stack),2)
@@ -31,7 +33,7 @@ class NodeUpstreamTests(unittest.IsolatedAsyncioTestCase):
                 ui.demo.reload();ui.render_page()
                 ui.query_one('#matrix').move_cursor(row=0,column=ui.col_keys.index('upstream_url'))
                 await pilot.press('enter');await pilot.pause()
-                ui.screen.query_one('#value',Input).value=''
+                ui.screen.query_one('#mode',ChoiceRow).value=False;await pilot.pause()
                 await pilot.press('ctrl+s');await pilot.pause()
                 self.assertEqual(app.snapshot().nodes[0].upstream_url,'')
 

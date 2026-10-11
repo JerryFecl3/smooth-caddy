@@ -19,9 +19,12 @@ from .labels import label
 from .guide import usage_guide
 from .configuration import edit_configuration
 from .dialogs import Field, Form, SSHGuide, HelpGuide, PasswordDialog, InitializationDialog
-from ..network.models import Listen, MODES, PORTS
+from ..network.models import Listen, Service, service_policy, MODES, PORTS
 
-PAGES = {'deployment': tr('部署'), 'sites': tr('站点'), 'nodes': tr('节点'), 'regions': tr('区域'), 'clients': tr('mTLS证书'), 'public_tls': tr('TLS证书'), 'ca': tr('mTLS证书 / CA')}
+PAGES = {'deployment': tr('部署'), 'sites': tr('站点'), 'nodes': tr('节点'), 'regions': tr('区域'), 'clients': tr('mTLS证书'), 'public_tls': tr('TLS证书'), 'archives': tr('存档'), 'ca': tr('mTLS证书 / CA')}
+
+NAV_PAGES = {key: PAGES[key] for key in ('deployment','sites','nodes','clients','public_tls')}
+NAV_PAGES['settings'] = tr('设置')
 
 def unlocked_operation(method):
     @wraps(method)
@@ -41,7 +44,7 @@ class Terminal(App, inherit_bindings=False):
         Binding("f7", "move_item(-1)", show=False),
         Binding("f8", "move_item(1)", show=False),
         Binding('f10', 'toggle_shortcuts', tr('帮助'), priority=True),
-        *[Binding(f'f{i}', f'nav_page({i})', title, priority=True) for i, title in enumerate((tr('部署'), tr('站点'), tr('节点'), tr('区域'), tr('mTLS证书'), tr('TLS证书')), 1)],
+        *[Binding(f'f{i}', f'nav_page({i})', title, priority=True) for i, title in enumerate(NAV_PAGES.values(), 1)],
         Binding('tab', 'next_region', tr('下一区域'), priority=True),
         Binding('shift+tab', 'previous_region', tr('上一区域'), priority=True),
         Binding('ctrl+o', 'edit', tr('编辑')), Binding('ctrl+t', 'toggle_client', tr('启用 / 禁用')), Binding('ctrl+n', 'new', tr('新增')), Binding('delete', 'delete', tr('删除')),
@@ -59,6 +62,8 @@ class Terminal(App, inherit_bindings=False):
         self.demo = State(application)
         from .public_tls import PublicTLSPage
         self.public_tls_page = PublicTLSPage(self)
+        from .archives import ArchivesPage
+        self.archives_page = ArchivesPage(self)
         self.page = 'deployment'
         self.rendered_page = None
         self.col_keys = []
@@ -69,20 +74,28 @@ class Terminal(App, inherit_bindings=False):
         yield Static('Smooth Caddy', id='brand')
         with Horizontal(id='workspace'):
             with Vertical(id='sidebar'):
-                yield ListView(*[ListItem(Label(title), id='nav-' + key) for key, title in {k: v for k, v in PAGES.items() if k != 'ca'}.items()], id='nav')
+                yield ListView(*[ListItem(Label(title), id='nav-' + key) for key, title in NAV_PAGES.items()], id='nav')
                 yield Static('', id='nav-note')
-                yield Button(tr('修改口令'), id='password')
                 yield Button(tr('帮助 · F10'), id='help')
                 yield Button(tr('退出 · ^q'), id='quit')
             with Vertical(id='main'):
+                yield Static(tr('设置'), id='settings-title')
+                with HorizontalScroll(id='settings-tabs'):
+                    yield Button(tr('区域'), id='settings-regions')
+                    yield Button(tr('存档'), id='settings-archives')
+                    yield Static('', classes='action-spacer')
+                    yield Button(tr('导入配置'), id='settings-import')
+                    yield Button(tr('修改口令'), id='password')
+                yield Static('', id='page-summary', markup=False)
                 yield DataTable(id='matrix', fixed_columns=1, zebra_stripes=True, cursor_type='cell', cursor_foreground_priority='css')
                 with VerticalScroll(id='ca-panel'):
                     yield Static('', id='ca-info', markup=False)
                 with HorizontalScroll(id='actions'):
                     yield Button(tr('禁用 · ^t'), id='client-toggle')
-                    yield Button(tr('编辑 · ^o'), id='edit', variant='primary')
-                    yield Button(tr('详情 · ^o'), id='batch-details', variant='primary')
-                    yield Button(tr('详情 · ^o'), id='pub-details', variant='primary')
+                    yield Button(tr('编辑 · ^o'), id='edit')
+                    yield Button(tr('导出 .run')+' · ^e', id='run-export')
+                    yield Button(tr('部署')+' · ^d', id='generate-deploy')
+                    yield Button(tr('详情 · ^o'), id='pub-details')
                     yield Button(tr('新增 · ^n'), id='new')
                     yield Button(tr('删除 · Del'), id='delete')
                     yield Button(tr('导出 P12 · ^e'), id='p12')
@@ -92,16 +105,22 @@ class Terminal(App, inherit_bindings=False):
                     yield Button(tr('全部申请'), id='pub-all')
                     yield Button(tr('公共TLS设置'), id='pub-settings')
                     yield Button(tr('lego 管理'), id='pub-tool')
-                    yield Button(tr('高级设置'), id='site-settings')
                     yield Button(tr('CA 管理'), id='ca-open')
-                    yield Button(tr('新增并部署'), id='generate-deploy')
+                    yield Button(tr('全部导出'), id='run-export-all')
+                    yield Button(tr('全部部署'), id='deploy-all')
                     yield Button(tr('SSH 公钥'), id='ssh-guide')
                     yield Button(tr('初始化 CA'), id='initialize')
                     yield Button(tr('重置 SSH 私钥'), id='ssh-reset', variant='error')
 
+                with HorizontalScroll(id='archive-actions'):
+                    yield Button(tr('新增存档')+' · ^n',id='archive-save')
+                    yield Button(tr('载入'),id='archive-restore')
+                    yield Button(tr('删除')+' · Del',id='archive-delete')
+                    yield Button(tr('导出')+' · ^e',id='archive-export')
+
     def on_mount(self):
         self.theme = 'textual-dark'
-        self.query_one('#nav', ListView).index = list(PAGES).index(self.page)
+        self.query_one('#nav', ListView).index = list(NAV_PAGES).index(self.page)
         self.render_page()
         self.query_one('#matrix').focus()
         self.call_after_refresh(self.initialize_startup)
@@ -135,6 +154,7 @@ class Terminal(App, inherit_bindings=False):
             return
         if event.item.disabled: return
         target = event.item.id.removeprefix('nav-')
+        if target == 'settings': target = 'regions'
         if target == self.page:
             return
         self.positions[self.page] = self.query_one('#matrix', DataTable).cursor_coordinate
@@ -147,6 +167,7 @@ class Terminal(App, inherit_bindings=False):
         self.positions[self.page] = table.cursor_coordinate
         if event.item.disabled: return
         target = event.item.id.removeprefix('nav-')
+        if target == 'settings': target = 'regions'
         self.page = target
         self.render_page()
         self.query_one('#matrix').focus()
@@ -197,11 +218,35 @@ class Terminal(App, inherit_bindings=False):
 
     def refresh_navigation_labels(self):
         errors = self.demo.errors()
-        for i, key in enumerate((k for k in PAGES if k != 'ca'), 1):
+        for i, key in enumerate(NAV_PAGES, 1):
             item = self.screen_stack[0].query_one('#nav-' + key, ListItem)
-            count = sum(1 for k in errors if k[0] == key)
+            count = sum(1 for k in errors if k[0] == ('regions' if key == 'settings' else key))
             item.set_class(bool(count), 'config-error')
-            item.query_one(Label).update(PAGES[key] + (f' · F{i}' if self.show_shortcuts else '') + ('  !' if count else ''))
+            item.query_one(Label).update(NAV_PAGES[key] + (f' · F{i}' if self.show_shortcuts and i<=6 else '') + ('  !' if count else ''))
+
+    def on_descendant_focus(self, event):
+        self.call_after_refresh(self.refresh_button_focus)
+
+    def on_descendant_blur(self, event):
+        self.call_after_refresh(self.refresh_button_focus)
+
+    def refresh_button_focus(self):
+        """Blue mirrors Enter on a focused list, never general importance."""
+        for screen in self.screen_stack:
+            for button in screen.query(Button):button.remove_class('list-default')
+        focused=self.screen.focused
+        in_navigation = focused is not None and any(widget.id == 'sidebar' for widget in [focused,*focused.ancestors])
+        self.screen_stack[0].query_one('#matrix',DataTable).show_cursor = not in_navigation
+        if focused is None or not getattr(focused,'row_count',0):return
+        target=None
+        if len(self.screen_stack)==1 and focused.id=='matrix':
+            target={'sites':'edit','nodes':'edit','regions':'edit','public_tls':'pub-details'}.get(self.page)
+        elif focused.id=='versions':
+            from .publishing import Export
+            if isinstance(self.screen,Export):target='generate'
+        if target:
+            button=self.screen.query_one('#'+target,Button)
+            if not button.disabled and button.display:button.add_class('list-default')
 
     def action_nav_page(self, number):
         if len(self.screen_stack) != 1: return
@@ -213,7 +258,7 @@ class Terminal(App, inherit_bindings=False):
     def check_action(self, action, parameters):
         if action == 'quit' and any(getattr(screen, 'busy', False) or (hasattr(screen, 'finished') and not screen.finished) for screen in self.screen_stack):
             return False
-        if action in ('next_region', 'previous_region', 'nav_page'):
+        if action in ('next_region', 'previous_region', 'nav_page', 'edit', 'new', 'delete', 'toggle_client', 'export', 'deploy', 'move_item', 'navigation'):
             return len(self.screen_stack) == 1
         return True
 
@@ -226,14 +271,19 @@ class Terminal(App, inherit_bindings=False):
     def move_region(self, direction):
         focused = self.focused
         ids = {w.id for w in ([focused] + list(focused.ancestors))} if focused else set()
-        current = 0 if 'sidebar' in ids else 2 if 'actions' in ids else 1
-        target = (current + direction) % 3
-        if target == 0:
+        groups = ['sidebar']
+        if self.page in ('regions','archives'): groups.append('settings-tabs')
+        groups.extend(['content','archive-actions' if self.page=='archives' else 'actions'])
+        current = next((group for group in groups if group in ids),'content')
+        target = groups[(groups.index(current)+direction)%len(groups)]
+        if target == 'sidebar':
             self.query_one('#nav').focus()
-        elif target == 1:
+        elif target == 'content':
             self.query_one('#ca-panel' if self.page == 'ca' else '#matrix').focus()
+        elif target == 'settings-tabs':
+            self.query_one('#settings-'+self.page).focus()
         else:
-            self.screen.focus_next('#actions Button')
+            self.screen.focus_next('#'+target+' Button')
 
     def action_navigation(self):
         if len(self.screen_stack) == 1:
@@ -251,64 +301,82 @@ class Terminal(App, inherit_bindings=False):
 
     def render_page(self):
         self.rendered_page = self.page
+        self.call_after_refresh(self.refresh_button_focus)
+        in_settings = self.page in ('regions','archives')
+        self.query_one('#settings-title').display = in_settings
+        self.query_one('#settings-tabs').display = in_settings
+        for tab in ('regions','archives'):
+            self.query_one('#settings-'+tab,Button).set_class(self.page == tab, 'nav-active')
         self.demo.refresh_validation()
         errors = self.demo.errors()
-        for key in (k for k in PAGES if k != 'ca'):
+        for key in NAV_PAGES:
             item = self.query_one('#nav-' + key, ListItem)
-            item.set_class(key == self.page or (key == 'clients' and self.page == 'ca'), 'active-page')
-            count = sum(1 for k in errors if k[0] == key)
+            item.set_class(key == self.page or (key == 'clients' and self.page == 'ca') or (key == 'settings' and self.page in ('regions','archives')), 'active-page')
+            count = sum(1 for k in errors if k[0] == ('regions' if key == 'settings' else key))
             item.set_class(bool(count), 'config-error')
         self.refresh_navigation_labels()
         table = self.query_one('#matrix', DataTable)
         table.display = self.page != 'ca'
-        table.cursor_type = 'row' if self.page in ('deployment', 'clients', 'public_tls') else 'cell'
+        table.cursor_type = 'row' if self.page in ('deployment', 'clients', 'public_tls', 'archives') else 'cell'
         self.query_one('#ca-panel').display = self.page == 'ca'
-        self.query_one('#new').display = self.page != 'ca'
+        self.query_one('#archive-actions').display = self.page == 'archives'
+        self.query_one('#actions').display = self.page != 'archives'
+        self.query_one('#new').display = self.page not in ('ca','deployment','archives')
         self.query_one('#edit').display = self.page in ('nodes', 'sites', 'regions')
-        self.query_one('#site-settings').display = self.page == 'sites'
         self.query_one('#ca-open').display = self.page == 'clients'
         for key in ('pub-details','pub-all','pub-settings','pub-tool'):
             self.query_one('#'+key).display = self.page == 'public_tls'
         self.query_one('#ca-back').display = self.page == 'ca'
-        for key in ('generate-deploy', 'ssh-guide', 'ssh-reset'):
-            self.query_one('#' + key).display = self.page == 'deployment'
-        self.query_one('#delete').display = self.page in ('nodes', 'sites', 'regions', 'deployment', 'public_tls')
+        for key in ('generate-deploy','run-export','run-export-all','deploy-all'):
+            self.query_one('#'+key).display = self.page == 'deployment'
+        for key in ('ssh-guide','ssh-reset'):
+            self.query_one('#'+key).display = self.page == 'nodes'
+        for key in ('archive-save','archive-restore','archive-export','archive-delete'):
+            self.query_one('#'+key).display = self.page == 'archives'
+        summary=self.query_one('#page-summary',Static)
+        summary.display=False
+        summary.update('')
+        self.query_one('#delete').display = self.page in ('nodes', 'sites', 'regions', 'public_tls')
         self.query_one('#p12').display = self.page == 'clients'
         self.query_one('#client-toggle').display = self.page == 'clients'
         for key in ('initialize', 'public-ca'):
             self.query_one('#' + key).display = self.page == 'ca'
-        for key in ('batch-details',):
-            self.query_one('#'+key).display=self.page=='deployment'
         self.query_one('#delete').disabled = False
         table.clear(columns=True)
         self.row_ids, self.col_keys = [], []
         if self.page == 'public_tls':
             self.public_tls_page.refresh_records(refresh_validation=False)
+        elif self.page == 'archives':
+            self.archives_page.render(table)
         elif self.page == 'deployment':
-            releases = self.demo.releases
-            table.add_columns(tr('配置批次'),tr('节点数'),tr('站点数'),tr('区域数'))
-            for r in releases:
-                table.add_row(r.version,*[str(len(r.summary[key])) for key in ('nodes','sites','regions')],key=r.version)
-            pos = self.positions.get(self.page, (0, 0))
-            table.move_cursor(row=min(pos[0], max(0, len(releases)-1)))
-            self.query_one('#delete').disabled = not releases
-            for key in ('batch-details',):self.query_one('#'+key).disabled=not releases
-            self.update_selection()
+            rows=[self.deployment_cells(node,errors) for node in self.demo.nodes]
+            headers=[(tr('节点'),'node'),*[(region.name,region.id) for region in self.demo.regions]]
+            for index,(heading,identity) in enumerate(headers):
+                width=max(22 if index==0 else 34,cell_len(heading),max((cell_len(line) for row in rows for line in row[index].plain.splitlines()),default=0)+2)
+                table.add_column(heading,key=identity,width=width)
+            for node,cells in zip(self.demo.nodes,rows):
+                table.add_row(*cells,key=node.id,height=max(2,*(cell.plain.count('\n')+1 for cell in cells)))
+            pos=self.positions.get('deployment',(0,0))
+            table.move_cursor(row=min(pos[0],max(0,len(self.demo.nodes)-1)))
+            blocked=bool(errors) or not self.demo.nodes or not self.demo.initialized
+            for key in ('generate-deploy','run-export','run-export-all','deploy-all'):
+                self.query_one('#'+key).disabled=blocked
         elif self.page == 'ca':
             self.render_ca()
         else:
             columns = [('name', tr('名称'), 18 if self.page == 'clients' else 11)]
             if self.page == 'nodes':
-                columns += [('platform', tr('平台 / 架构'), 20), ('ssh_hops', tr('SSH 路径'), max(18, min(46, max((len(self.cell_value(n, 'ssh_hops')) for n in self.demo.nodes), default=0) + 1)))]
+                columns += [('platform', tr('平台 / 架构'), 20), ('ssh_hops', tr('SSH 地址'), max(18, min(46, max((cell_len(line) for n in self.demo.nodes for line in self.cell_value(n, 'ssh_hops').splitlines()), default=0) + 1)))]
             elif self.page == 'sites':
-                columns += [('domain', tr('服务域名'), 25), ('tls_source', tr('TLS 来源'), 20), ('source', tr('源头地址'), 30)]
+                columns=[('name',tr('名称'),max(12,max((cell_len(s.name) for s in self.demo.sites),default=0)+2))]
+                columns += [(key,title,max(minimum,min(maximum,max((cell_len(getattr(s,key)) for s in self.demo.sites),default=0)+2))) for key,title,minimum,maximum in [('domain',tr('服务域名'),20,32),('source',tr('源地址'),24,36)]]
             elif self.page == 'regions':
-                columns += [(f'p{i}', p + tr(' 默认端口'), len(p) + (2 if i == 2 else 0) + 9) for i, p in enumerate(PORTS)]
+                columns += [('tls_source',tr('默认 TLS 来源'),20),('mtls',tr('默认 mTLS 验证'),20)]
             else:
                 columns += [('enabled', tr('状态'), 6), ('expiry', tr('有效期至'), 10)]
             if self.page in ('nodes', 'sites'):
-                columns += [('area:' + r.id, tr('绑定地址({0})', r.name) if self.page == 'nodes' else r.name, 32 if self.page == 'nodes' else 20) for r in self.demo.regions]
-            if self.page == 'nodes': columns += [('upstream_url',tr('上游地址'),36)]
+                columns += [('area:' + r.id, tr('绑定地址({0})', r.name) if self.page == 'nodes' else r.name, 32 if self.page == 'nodes' else max(20,max((cell_len(self.service_label(s,r)) for s in self.demo.sites),default=0)+2)) for r in self.demo.regions]
+            if self.page == 'nodes': columns += [('upstream_url',tr('上游'),max(28,max((cell_len(n.upstream_url) for n in self.demo.nodes),default=0)))]
             for key, label, width in columns:
                 table.add_column(label, key=key, width=max(width, cell_len(label)))
                 self.col_keys.append(key)
@@ -317,46 +385,75 @@ class Terminal(App, inherit_bindings=False):
                 cells = []
                 for key in self.col_keys:
                     value = self.cell_value(obj, key)
-                    bad = (self.page, obj.id, key) in errors or (key == 'platform' and (self.page, obj.id, 'arch') in errors)
+                    bad = (self.page, obj.id, key) in errors or (key == 'platform' and (self.page, obj.id, 'arch') in errors) or (self.page=='sites' and key.startswith('area:') and ('sites',obj.id,'tls_source') in errors)
                     cells.append(Text(('! ' if bad else '') + value, style='#ffb4a2' if bad else ''))
-                table.add_row(*cells, key=obj.id)
+                height = max(2,max((cell.plain.count('\n') + 1 for cell in cells),default=1)) if self.page == 'nodes' else 1
+                table.add_row(*cells, key=obj.id, height=height)
                 self.row_ids.append(obj.id)
             pos = self.positions.get(self.page, (0, 0))
             table.move_cursor(row=min(pos[0], max(0, len(self.row_ids)-1)), column=min(pos[1], len(self.col_keys)-1))
             self.update_selection()
 
+    def deployment_cells(self, node, errors):
+        def marked(value, bad):
+            return Text(('! ' if bad else '')+value,style='#ffb4a2' if bad else '')
+        target=node.ssh_hops[-1][0] if node.ssh_hops else tr('未配置')
+        if ':' in target:target='['+target+']'
+        bad=any(page=='nodes' and identity==node.id and not field.startswith('area:') for page,identity,field in errors)
+        cells=[marked(node.name+'\n'+target,bad)]
+        for region in self.demo.regions:
+            area=node.areas.get(region.id,Listen())
+            if not area.enabled:
+                cells.append(Text(tr('未启用')));continue
+            bad=('nodes',node.id,'area:'+region.id) in errors or any(page=='regions' and identity==region.id for page,identity,_ in errors)
+            cell=marked(self.cell_value(node,'area:'+region.id),bad)
+            sites=[site for site in self.demo.sites if service_policy(site,region).enabled]
+            name_width=max((cell_len(site.name) for site in sites),default=0)
+            for site in sites:
+                bad=any(page=='sites' and identity==site.id and (not field.startswith('area:') or field=='area:'+region.id) for page,identity,field in errors)
+                name=site.name+' '*(name_width-cell_len(site.name))
+                cell.append('\n  ');cell.append(Text(name+'  '+self.service_label(site,region)+(' !' if bad else ''),style='#ffb4a2' if bad else ''))
+            cells.append(cell)
+        return cells
+
+    def service_label(self, site, region, inheritance=False):
+        policy=service_policy(site,region)
+        if not policy.enabled:return label('disabled')
+        source=tr('私有CA') if policy.tls_source=='private_ca' else tr('公共CA')
+        pending=self.demo.validation.pending.get(site.id) if self.demo.validation and policy.tls_source=='public_ca' else None
+        return 'TLS('+source+')'+('·mTLS' if policy.mtls else '')+(' / '+pending if pending else '')
+
     def cell_value(self, obj, key):
-        if key == 'tls_source':
-            pending=self.demo.validation.pending.get(obj.id)
-            return label(obj.tls_source)+(' / '+pending if pending else '')
+        if key == 'tls_source':return label(obj.tls_source)
+        if key == 'mtls':return tr('开启') if obj.mtls else tr('关闭')
         if key == 'upstream_url':
-            return obj.upstream_url or tr('直达源头')
+            return tr('中继')+'\n'+obj.upstream_url if obj.upstream_url else tr('直连')
         if key == 'platform':
-            return f'{label(obj.platform)} {obj.arch}' if obj.platform and obj.arch else tr('未配置')
+            return (label(obj.platform) if obj.platform else tr('未配置'))+'\n'+(obj.arch or tr('未配置'))
         if key == 'ssh_hops':
             if not obj.ssh_hops: return tr('未配置')
-            return obj.ssh_hops[-1][0] + (f' (+{len(obj.ssh_hops)-1})' if len(obj.ssh_hops)>1 else '')
+            target=obj.ssh_hops[-1][0]
+            if ':' in target:target='['+target+']'
+            return target+('\n'+tr('(经{0}个地址跳转)',len(obj.ssh_hops)-1) if len(obj.ssh_hops)>1 else '')
         if key == 'expiry':
             return '2099-12-31'
         if key == 'enabled':
             return tr('启用') if obj.enabled else tr('禁用')
-        if key.startswith('p') and self.page == 'regions':
-            return obj.ports[int(key[1:])]
         if key.startswith('area:'):
             rid = key[5:]
             if self.page == 'sites':
-                return label(obj.areas.get(rid, MODES[0]))
+                return self.service_label(obj,self.demo.find('regions',rid),inheritance=True)
             a = obj.areas.get(rid, Listen())
             if not a.enabled:
-                return tr('关闭')
-            region = self.demo.find('regions', rid)
-            ports = [a.overrides[i] if a.overrides[i] is not None else region.ports[i] for i in range(2)]
-            addresses = (a.ips[0] + (f' (+{len(a.ips)-1})' if len(a.ips) > 1 else '')) if a.ips else tr('未填写 IP')
-            return f"{addresses} : {ports[0]}/{ports[1]}"
+                return tr('未启用')
+            ports = a.ports
+            hosts = [f'[{ip}]' if ':' in ip else ip for ip in (a.ips or [tr('未填写 IP')])]
+            suffix=':('+ '/'.join(ports)+')' if ports!=['80','443','8443'] else ''
+            return '\n'.join(host+suffix for host in hosts)
         return str(getattr(obj, key)) or tr('未填写')
 
     def current(self):
-        if self.page in ('ca', 'deployment') or not self.row_ids:
+        if self.page in ('ca', 'deployment', 'archives') or not self.row_ids:
             return None, None
         t = self.query_one('#matrix', DataTable)
         row, col = t.cursor_coordinate
@@ -369,6 +466,7 @@ class Terminal(App, inherit_bindings=False):
         self.update_selection()
 
     def update_selection(self):
+        self.call_after_refresh(self.refresh_button_focus)
         obj, key = self.current()
         self.query_one('#edit').disabled = obj is None
         if self.page == 'clients':
@@ -378,15 +476,19 @@ class Terminal(App, inherit_bindings=False):
 
     @on(DataTable.RowSelected, '#matrix')
     def release_selected(self):
-        if self.page == 'deployment': self.batch_details()
-        elif self.page == 'public_tls': self.public_tls_page.action_details()
+        if self.page == 'public_tls': self.public_tls_page.action_details()
 
     @on(DataTable.RowHighlighted, '#matrix')
     def release_highlighted(self):
+        if self.page=='deployment':self.positions[self.page]=self.query_one('#matrix',DataTable).cursor_coordinate
         if self.page in ('deployment', 'clients'): self.update_selection()
 
-    @unlocked_operation
     def action_toggle_client(self):
+        if len(self.screen_stack) != 1 or self.page != 'clients': return
+        self.toggle_selected_client()
+
+    @unlocked_operation
+    def toggle_selected_client(self):
         if len(self.screen_stack) != 1 or self.page != 'clients': return
         obj, _ = self.current()
         if obj is not None:
@@ -395,7 +497,9 @@ class Terminal(App, inherit_bindings=False):
 
     @on(DataTable.CellSelected)
     def edit_selected(self):
+        if len(self.screen_stack)!=1 or self.page not in ('nodes','sites','regions'):return
         obj,key=self.current()
+        if obj is None:return
         self.require_unlock(lambda:edit_configuration(self))
 
     def after_change(self, message):
@@ -416,10 +520,9 @@ class Terminal(App, inherit_bindings=False):
     def action_new(self):
         if self.page=='public_tls' and len(self.screen_stack)==1:
             self.public_tls_page.action_new();return
-        if len(self.screen_stack) == 1 and self.page == 'deployment':
-            self.open_export('export')
-            return
-        if len(self.screen_stack) != 1 or self.page in ('ca', 'deployment'):
+        if len(self.screen_stack)==1 and self.page=='archives':
+            self.archives_page.save();return
+        if len(self.screen_stack) != 1 or self.page in ('ca', 'deployment', 'archives'):
             return
         if self.page == 'clients':
             self.require_unlock(self.new_item)
@@ -443,21 +546,15 @@ class Terminal(App, inherit_bindings=False):
                               [Field('name', tr('名称'), placeholder=tr('例如：Personal-Phone') if page == 'clients' else '')], lambda v: self.name_error(page, v['name']),
                               '' if page != 'clients' else tr('仅允许英文字母、数字、空格及 - _ .；有效期至 2099-12-31')), saved)
 
-    @unlocked_operation
     def action_delete(self):
-        if self.page=='public_tls' and len(self.screen_stack)==1:
-            self.public_tls_page.action_delete();return
-        if len(self.screen_stack) == 1 and self.page == 'deployment':
-            release = self.selected_release()
-            if release is None: return
-            def deleted(v):
-                if v is not None:
-                    self.application.releases.delete(release.version)
-                    self.after_change(tr('已删除：') + release.version)
-            self.push_screen(Form(tr('删除配置批次？'), [], note=release.version + tr('\n删除此批次的配置、证书和记录，不影响已部署节点及已导出的 package。')), deleted)
-            return
-        if len(self.screen_stack) != 1 or self.page not in ('nodes', 'sites', 'regions'):
-            return
+        if len(self.screen_stack)!=1 or self.page not in ('nodes','sites','regions','public_tls','archives'):return
+        if self.page=='public_tls':self.public_tls_page.action_delete();return
+        if self.page=='archives':self.archives_page.delete();return
+        if self.current()[0] is None:return
+        self.delete_selected_item()
+
+    @unlocked_operation
+    def delete_selected_item(self):
         obj, _ = self.current()
         if obj is None:
             return
@@ -483,16 +580,10 @@ class Terminal(App, inherit_bindings=False):
             callback = lambda value: self.perform(lambda: original(value))
         return super().push_screen(screen, callback, **kwargs)
 
-    @unlocked_operation
-    def site_settings(self):
-        def saved(values):
-            if values is None: return
-            self.demo.config.verify_origin_https = values['verify']
-            self.demo.save()
-            self.after_change('')
-        self.push_screen(Form(tr('站点 / 高级设置'),
-            [Field('verify', tr('校验 HTTPS 源头证书'), self.demo.config.verify_origin_https, boolean=True)],
-            note=tr('对所有站点统一生效。关闭后仍加密，但不验证源头证书的信任链和名称。\n不影响用户入口及节点间 TLS/mTLS。')), saved)
+    def pop_screen(self):
+        result = super().pop_screen()
+        self.call_after_refresh(self.refresh_button_focus)
+        return result
 
     def export_certificate(self, client=None):
         from ..network.files import publish
@@ -544,7 +635,7 @@ class Terminal(App, inherit_bindings=False):
         self.query_one('#ca-info', Static).update(table)
         self.query_one('#public-ca').disabled = not self.demo.initialized
         self.query_one('#initialize', Button).label = tr('重新初始化 CA') if self.demo.initialized else tr('初始化 CA')
-        self.query_one('#initialize', Button).variant = 'error' if self.demo.initialized else 'primary'
+        self.query_one('#initialize', Button).variant = 'error' if self.demo.initialized else 'default'
 
     def require_unlock(self, continuation):
         security = self.application.security
@@ -597,8 +688,7 @@ class Terminal(App, inherit_bindings=False):
     def action_edit(self):
         if self.page=='public_tls' and len(self.screen_stack)==1:
             self.public_tls_page.action_details();return
-        if self.page=='deployment':self.batch_details()
-        elif self.page in ('nodes', 'sites', 'regions'): self.edit_selected()
+        if self.page in ('nodes', 'sites', 'regions'): self.edit_selected()
 
     def action_export(self):
         if len(self.screen_stack) != 1: return
@@ -607,40 +697,28 @@ class Terminal(App, inherit_bindings=False):
             if client: self.export_certificate(client)
         elif self.page == 'ca':
             if self.demo.initialized: self.export_certificate()
-        elif self.page == 'deployment': return
+        elif self.page == 'deployment': self.open_export('package')
+        elif self.page == 'archives': self.archives_page.export(selected=True)
 
-    def open_export(self, mode):
+    def open_export(self, mode, all_nodes=False):
         if len(self.screen_stack) != 1:
             return
         if self.demo.errors() or not self.demo.initialized or not self.demo.nodes:
-            self.show_info(tr('无法新增配置批次'), tr('请初始化 CA、添加节点，并修正配置错误。'))
+            self.show_info(tr('无法准备运行材料'), tr('请初始化 CA、添加节点，并修正配置错误。'))
             return
-        from .publishing import Export,create_batch
-        self.require_unlock(lambda: create_batch(self) if mode=='export' else self.push_screen(Export('new-deploy'),lambda _:self.after_change('')))
-
-    def selected_release(self):
-        releases = self.demo.releases
-        row = self.query_one('#matrix', DataTable).cursor_row
-        return releases[row] if 0 <= row < len(releases) else None
+        node_ids=None
+        if not all_nodes:
+            row=self.query_one('#matrix',DataTable).cursor_row
+            if not 0<=row<len(self.demo.nodes):return
+            node_ids=(self.demo.nodes[row].id,)
+        from .publishing import Export
+        self.require_unlock(lambda:self.push_screen(Export('package' if mode=='package' else 'deploy',node_ids),lambda _:self.after_change('')))
 
     def action_deploy(self):
-        if len(self.screen_stack) != 1: return
-        if self.page != 'deployment':
-            self.page = 'deployment'
-            self.render_page()
-            self.query_one('#matrix').focus()
-            return
-        self.batch_details()
-
-    def batch_details(self):
         if len(self.screen_stack)!=1:return
-        batch=self.selected_release()
-        if batch:
-            from .publishing import BatchDetails,Export
-            def chosen(mode):
-                if mode:
-                    self.require_unlock(lambda:self.push_screen(Export(mode,batch)))
-            self.push_screen(BatchDetails(batch),chosen)
+        if self.page!='deployment':
+            self.page='deployment';self.render_page();self.query_one('#matrix').focus();return
+        self.open_export('deploy')
 
     def action_help(self):
         self.action_toggle_shortcuts()
@@ -648,9 +726,19 @@ class Terminal(App, inherit_bindings=False):
     @on(Button.Pressed)
     def buttons(self, event):
         key = event.button.id
-        if key=='batch-details': self.batch_details()
+        if key in ('settings-regions','settings-archives'):
+            self.positions[self.page] = self.query_one('#matrix',DataTable).cursor_coordinate
+            self.page = key.removeprefix('settings-')
+            self.render_page()
+        elif key=='run-export': self.open_export('package')
+        elif key=='run-export-all': self.open_export('package',all_nodes=True)
+        elif key=='deploy-all': self.open_export('deploy',all_nodes=True)
+        elif key=='archive-save': self.archives_page.save()
+        elif key=='settings-import': self.archives_page.import_json()
+        elif key=='archive-restore': self.archives_page.restore()
+        elif key=='archive-export': self.archives_page.export(selected=True)
+        elif key=='archive-delete': self.archives_page.delete()
         elif key == 'client-toggle': self.action_toggle_client()
-        elif key == 'site-settings': self.site_settings()
         elif key == 'edit': self.edit_selected()
         elif key == 'help': self.action_help()
         elif key == 'quit': self.exit()

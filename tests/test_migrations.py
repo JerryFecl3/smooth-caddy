@@ -7,7 +7,7 @@ import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
-from app.network.models import Configuration
+from app.network.models import Service, service_policy, Configuration
 from app.network.storage import APPLICATION_ID, Store
 from app.tui.labels import label, options
 
@@ -52,14 +52,14 @@ class MigrationTests(unittest.TestCase):
             config = store.load()
             self.assertEqual([n.upstream_url for n in config.nodes], ['', 'https://', ''])
             self.assertEqual([n.platform for n in config.nodes], ['debian_13','openwrt_25_12',''])
-            self.assertEqual([s.tls_source for s in config.sites], ['public_ca','private_ca'])
-            self.assertEqual(set(config.sites[0].areas.values()), {'https_mtls','http','https','disabled'})
+            self.assertEqual([a.tls_source for a in config.sites[0].areas.values()], ['public_ca','private_ca','public_ca','public_ca'])
+            self.assertEqual([(a.enabled,a.mtls) for a in config.sites[0].areas.values()],[(True,True),(True,False),(True,False),(False,False)])
             self.assertEqual(config.nodes[0].name, '直连源头')
             self.assertEqual(config.sites[0].name, '公共 CA')
             self.assertNotIn('upstream', config.to_dict()['nodes'][1])
-            self.assertFalse(config.verify_origin_https)
+            self.assertFalse(config.sites[0].verify_origin_https)
             self.assertEqual(config.revision, 8)
-            self.assertEqual(store.db.execute('PRAGMA user_version').fetchone()[0], 6)
+            self.assertEqual(store.db.execute('PRAGMA user_version').fetchone()[0], 10)
             self.assertEqual(store.db.execute('SELECT value FROM secrets').fetchone()[0], b'unchanged-encrypted-bytes')
         finally:
             store.close()

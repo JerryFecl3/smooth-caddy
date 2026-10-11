@@ -8,7 +8,7 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives.serialization import pkcs12
 from app.network.application import Application
-from app.network.models import Listen
+from app.network.models import Service, service_policy, Listen
 from app.network.storage import ConflictError, Store
 
 class ApplicationTests(unittest.TestCase):
@@ -82,14 +82,15 @@ class ApplicationTests(unittest.TestCase):
 
 
     def test_origin_verification_strict_format_and_persistence(self):
-        from app.network.models import Configuration
+        from app.network.models import Service, service_policy, Configuration
+        self.app.create('sites','Origin')
         value = self.app.snapshot().to_dict()
-        value.pop('verify_origin_https')
+        value['sites'][0].pop('verify_origin_https')
         with self.assertRaises(ValueError): Configuration.from_dict(value)
         cfg = self.app.snapshot()
-        cfg.verify_origin_https = False
+        cfg.sites[0].verify_origin_https = True
         self.app.save_configuration(cfg)
-        self.assertFalse(self.app.snapshot().verify_origin_https)
+        self.assertTrue(self.app.snapshot().sites[0].verify_origin_https)
         cfg = self.app.snapshot()
-        cfg.verify_origin_https = 'false'
+        cfg.sites[0].verify_origin_https = 'false'
         with self.assertRaises(ValueError): self.app.save_configuration(cfg)

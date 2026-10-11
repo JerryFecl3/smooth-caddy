@@ -21,7 +21,7 @@ class CAOverviewTests(unittest.IsolatedAsyncioTestCase):
                 app.security.lock();ui=Terminal(app)
                 with patch.object(app.security,'decrypt',side_effect=AssertionError('public view must not decrypt')):
                     async with ui.run_test(size=(140,40)) as pilot:
-                        await pilot.press('f5');await pilot.click('#ca-open');await pilot.pause()
+                        await pilot.press('f4');await pilot.click('#ca-open');await pilot.pause()
                         self.assertEqual(ui.page,'ca');self.assertEqual(len(ui.screen_stack),1)
                         for width in (70,120):
                             output=StringIO();console=Console(file=output,width=width,color_system=None)

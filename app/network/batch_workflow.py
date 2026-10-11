@@ -1,6 +1,6 @@
 """Compose public certificate preparation and immutable batch generation."""
 from ..i18n import tr
-from .models import canonical_domain, configuration_errors
+from .models import canonical_domain, configuration_errors, public_sites
 from .plans import TaskPlan, certificate_plan, generation_plan
 from typing import NamedTuple
 from .certificate_policy import renewal_status, requested_domains
@@ -17,14 +17,21 @@ class BatchPlan(NamedTuple):
 class BatchWorkflow:
     def __init__(self, app):self.app=app
 
+    def select_nodes(self, config, node_ids=None):
+        from copy import deepcopy
+        selected=deepcopy(config)
+        if node_ids is not None:
+            identities=set(node_ids)
+            if not identities or not identities.issubset({n.id for n in config.nodes}):
+                raise ValueError(tr("请选择有效节点"))
+            selected.nodes=[n for n in selected.nodes if n.id in identities]
+        return selected
+
     def inspect(self, config):
         errors=configuration_errors(config);matches={};pending={}
         inventory=self.app.public_tls.list()
         checked={}
-        for site in config.sites:
-            if site.tls_source not in ('private_ca','public_ca'):
-                errors[('sites',site.id,'tls_source')]=[tr('请选择 TLS 来源')];continue
-            if site.tls_source!='public_ca' or not any(m in ('https','https_mtls') for m in site.areas.values()):continue
+        for site in public_sites(config):
             try:domain=canonical_domain(site.domain)
             except ValueError:continue
             exact=[i for i in inventory if i['domain']==domain]
@@ -55,7 +62,7 @@ class BatchWorkflow:
         items=list({item['id']:item for item in matches.values()}.values())
         return BatchPlan(certificate_plan(items).join(generation_plan(config)),items)
 
-    def create(self,progress=lambda _:None,*,task_progress=lambda _:None,cancel=None,config=None,plan=None):
+    def create(self,progress=lambda _:None,*,task_progress=lambda _:None,cancel=None,config=None,plan=None,source_config=None):
         self.app.security.require()
         if not self.app.certificates.initialized:raise ValueError(tr('请先初始化 CA'))
         config=config or self.app.snapshot()
@@ -65,7 +72,7 @@ class BatchWorkflow:
         if items:
             result=self.app.public_tls.issue_all([i['id'] for i in items],progress,mapped,cancel)
             if not result['success']:raise ValueError('\n'.join(result['errors']))
-        if self.app.snapshot().to_dict()!=config.to_dict():raise ValueError(tr('配置已变化，请重新生成'))
+        if self.app.snapshot().to_dict()!=(source_config or config).to_dict():raise ValueError(tr('配置已变化，请重新生成'))
         if self.app.public_tls.settings()['staging']!=environment:raise ValueError(tr('公共 TLS 环境已变化，请重新生成'))
         errors,matches,_=self.inspect(config)
         if errors:raise ValueError(tr('公共证书校验失败：')+'；'.join(m for messages in errors.values() for m in messages))
@@ -77,4 +84,17 @@ class BatchWorkflow:
             certificate=item['certificate'].encode();key=secret.get('key','').encode()
             self.app.public_tls.validate(certificate,key,requested_domains(item))
             materials[site_id]=(certificate,key)
-        return self.app.releases.create(progress,task_progress=mapped,cancel=cancel,config=config,public_materials=materials)
+        return self.app.releases.prepare(progress,task_progress=mapped,cancel=cancel,config=config,public_materials=materials)
+
+    def export(self, version, password, progress=lambda _:None, *, task_progress=lambda _:None, cancel=None, node_ids=None):
+        from .plans import assembly_plan
+        source_config=self.app.snapshot()
+        config=self.select_nodes(source_config,node_ids)
+        preparation=self.plan(config)
+        tasks=preparation.tasks.join(assembly_plan(config))
+        def mapped(event): task_progress(tasks.map(event))
+        prepared=self.create(progress,task_progress=mapped,cancel=cancel,config=config,plan=preparation,source_config=source_config)
+        try:
+            return self.app.releases.assemble(prepared,version,password=password,progress=progress,task_progress=mapped,cancel=cancel)
+        finally:
+            prepared.materials.clear()

@@ -82,7 +82,7 @@ class TaskProgressTests(unittest.IsolatedAsyncioTestCase):
             service=Application(directory)
             batch=SimpleNamespace(version='test')
             node=SimpleNamespace(id='node',name='ECS')
-            async def execute(batch,version,confirm,decide,progress,steps,cancel,created):
+            async def execute(batch,version,confirm,decide,progress,steps,cancel,created,*,node_ids=None):
                 steps(TaskStep(('探测','打包','上传','部署'),3))
                 answer=await decide(DeploymentIssue('node','ECS','install','连接中断',True))
                 self.assertEqual(answer,'retry')
@@ -108,8 +108,8 @@ class TaskProgressTests(unittest.IsolatedAsyncioTestCase):
             identity=service.create('nodes','Node')
             cfg=service.snapshot();cfg.nodes[0].ssh_hops=[['192.0.2.1']];service.save_configuration(cfg)
             batch=SimpleNamespace(version='test')
-            async def execute(original,version,confirm,decide,progress,steps,cancel,created):
-                created(batch);steps(TaskStep(('生成配置批次','探测','打包','上传','部署'),4))
+            async def execute(original,version,confirm,decide,progress,steps,cancel,created,*,node_ids=None):
+                created(batch);steps(TaskStep(('准备运行材料','探测','打包','上传','部署'),4))
                 return {'batch':batch,'nodes':cfg.nodes,'statuses':{identity:'success'},'success':True,'warnings':[]}
             try:
                 ui=Terminal(service)
@@ -132,7 +132,7 @@ class DeploymentResultPresentationTests(unittest.TestCase):
         from app.tui.task_progress import DeploymentProgress
         batch=SimpleNamespace(version='20261009-001609')
         panel=DeploymentProgress(batch,'v2.11.7')
-        panel.steps=('生成配置批次','部署 / Router','部署 / ECS')
+        panel.steps=('准备运行材料','部署 / Router','部署 / ECS')
         panel.step_notes={0:batch.version}
         result={'batch':batch,'nodes':[SimpleNamespace(id='r',name='Router'),SimpleNamespace(id='e',name='ECS')],
                 'statuses':{'r':'success','e':'失败'},'warnings':[]}

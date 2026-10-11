@@ -16,7 +16,7 @@ class CombinedDeploymentTests(unittest.IsolatedAsyncioTestCase):
         cfg=self.app.snapshot()
         for i,node in enumerate(cfg.nodes):node.platform='debian_13';node.arch='amd64';node.ssh_hops=[[f'192.0.2.{i+1}']]
         self.app.save_configuration(cfg)
-        self.batch=self.app.releases.create()
+        self.batch=self.app.releases.prepare()
 
     def contents(self,packages):
         result={}
@@ -30,30 +30,54 @@ class CombinedDeploymentTests(unittest.IsolatedAsyncioTestCase):
         seen={};events=[];cleaned=[]
         async def run(packages,*args):
             seen.update(self.contents(packages));seen['directory']=self.app.releases.directory(packages)
-            self.assertEqual(packages.configuration['nodes'][0]['name'],'A')
+            self.assertEqual(packages.configuration['nodes'][0]['name'],'Edited')
             return {p.node_id:'success' for p in packages.packages}
         @asynccontextmanager
         async def connect(route,confirm):
             cleaned.append(route[-1].name)
             yield SimpleNamespace(run=AsyncMock())
         with patch.object(self.app.deployment,'probe_node',new=AsyncMock(side_effect=['v2.11.7','v2.10.0'])),patch.object(self.app.releases.cache,'ensure',return_value=b'binary'),patch.object(self.app.deployment,'run',side_effect=run),patch.object(self.app.ssh,'connect',connect):
-            result=await self.app.deployment.execute(self.batch,'v2.11.7',AsyncMock(),AsyncMock(),lambda _:None,events.append,threading.Event())
-        self.assertTrue(result['success']);self.assertNotIn('caddy',seen['A']);self.assertIn('caddy',seen['B'])
-        self.assertFalse(seen['directory'].exists());self.assertEqual(cleaned,['A','B'])
+            result=await self.app.deployment.execute(None,'v2.11.7',AsyncMock(),AsyncMock(),lambda _:None,events.append,threading.Event())
+        self.assertTrue(result['success']);self.assertNotIn('caddy',seen['Edited']);self.assertIn('caddy',seen['B'])
+        self.assertFalse(seen['directory'].exists());self.assertEqual(cleaned,['Edited','B'])
         self.assertTrue(all(event.steps==events[0].steps for event in events))
-        self.app.releases.check(self.batch)
+        self.assertEqual(self.app.releases.list(),[])
+
+    async def test_selected_node_limits_export_probe_transfer_and_cleanup(self):
+        selected=self.app.snapshot().nodes[1].id
+        before=self.app.snapshot()
+        with patch.object(self.app.releases.cache,'ensure',return_value=b'binary'):
+            packages=self.app.batches.export('v2.11.7','export',node_ids=(selected,))
+        self.assertEqual([p.node_id for p in packages.packages],[selected])
+        seen=[];cleaned=[];events=[]
+        async def run(packages,*args):
+            seen.extend(p.node_id for p in packages.packages)
+            return {p.node_id:'success' for p in packages.packages}
+        @asynccontextmanager
+        async def connect(route,confirm):
+            cleaned.append(route[-1].name)
+            yield SimpleNamespace(run=AsyncMock())
+        with patch.object(self.app.deployment,'probe_node',new=AsyncMock(return_value='v2.11.7')) as probe,patch.object(self.app.deployment,'run',side_effect=run),patch.object(self.app.ssh,'connect',connect):
+            result=await self.app.deployment.execute(None,'v2.11.7',AsyncMock(),AsyncMock(),lambda _:None,events.append,threading.Event(),node_ids=(selected,))
+        self.assertTrue(result['success'])
+        self.assertEqual(seen,[selected]);self.assertEqual(cleaned,['B'])
+        self.assertEqual(probe.await_count,1)
+        self.assertEqual(probe.await_args.args[1].id,selected)
+        self.assertEqual(self.app.snapshot(),before)
+        self.assertNotIn('probe:'+before.nodes[0].id,events[0].task_ids)
+        with self.assertRaises(ValueError):self.app.batches.export('v2.11.7','export',node_ids=('missing',))
 
     async def test_failed_deploy_cleans_temporary_packages(self):
         async def run(packages,*args):return {p.node_id:'failed' for p in packages.packages}
         with patch.object(self.app.deployment,'probe_node',new=AsyncMock(return_value='v2.11.7')),patch.object(self.app.deployment,'run',side_effect=run),patch.object(self.app.releases.cache,'ensure',side_effect=AssertionError('no download')):
-            result=await self.app.deployment.execute(self.batch,'v2.11.7',AsyncMock(),AsyncMock(),lambda _:None,lambda _:None,threading.Event())
+            result=await self.app.deployment.execute(None,'v2.11.7',AsyncMock(),AsyncMock(),lambda _:None,lambda _:None,threading.Event())
         self.assertFalse(result['success']);self.assertEqual(len(list((Path(self.tmp.name)/'.tmp'/'tasks').rglob('*.run'))),0)
 
     async def test_probe_error_requires_retry_not_skip(self):
         from app.network.task_progress import TaskCancelled
         with patch.object(self.app.deployment,'probe_node',new=AsyncMock(side_effect=OSError('offline'))),patch.object(self.app.releases,'assemble') as assemble:
             with self.assertRaises(TaskCancelled):
-                await self.app.deployment.execute(self.batch,'v2.11.7',AsyncMock(),AsyncMock(return_value='stop'),lambda _:None,lambda _:None,threading.Event())
+                await self.app.deployment.execute(None,'v2.11.7',AsyncMock(),AsyncMock(return_value='stop'),lambda _:None,lambda _:None,threading.Event())
             assemble.assert_not_called()
 
     async def test_package_export_is_complete_untracked_and_uses_saved_materials(self):
@@ -68,15 +92,17 @@ class CombinedDeploymentTests(unittest.IsolatedAsyncioTestCase):
         directory=self.app.releases.directory(packages)
         self.assertEqual(len(list(directory.iterdir())),2)
         self.assertFalse(list(directory.glob('*.json')))
-        self.assertEqual(len(self.app.releases.list()),1)
+        self.assertEqual(len(self.app.releases.list()),0)
         self.assertEqual(original,self.app.releases.load(self.batch)[1])
-        self.assertFalse(list(self.app.releases.directory(self.batch).rglob('*.run')))
+        self.assertFalse(self.app.releases.root.exists())
 
-    async def test_tampered_batch_blocks_packaging(self):
-        path=self.app.releases.directory(self.batch)/'metadata.json';path.write_bytes(b'{}')
-        with patch.object(self.app.releases.cache,'ensure') as ensure,self.assertRaisesRegex(ValueError,'metadata'):
-            self.app.releases.assemble(self.batch,'v2.11.7',password='export')
-        ensure.assert_not_called()
+    async def test_legacy_batch_cannot_deploy_or_export(self):
+        from tests.legacy_batches import legacy_batch
+        batch=legacy_batch(self.app)
+        with self.assertRaisesRegex(ValueError,'当前设置'):
+            await self.app.deployment.execute(batch,'v2.11.7',AsyncMock(),AsyncMock(),lambda _:None,lambda _:None,threading.Event())
+        with self.assertRaisesRegex(ValueError,'当前设置'):
+            self.app.releases.assemble(batch,'v2.11.7',password='export')
 
     async def test_new_deployment_exposes_fixed_two_level_plan(self):
         from app.network.task_progress import TaskState
@@ -93,7 +119,7 @@ class CombinedDeploymentTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(self.app.deployment,'probe_node',new=AsyncMock(return_value='v2.11.7')),patch.object(self.app.deployment,'run',side_effect=run),patch.object(self.app.ssh,'connect',connect):
             result=await self.app.deployment.execute(None,'v2.11.7',AsyncMock(),AsyncMock(),lambda _:None,progress,threading.Event())
         self.assertTrue(result['success'])
-        self.assertEqual([name for name,_ in model.sections()],['生成配置批次','部署到节点'])
+        self.assertEqual([name for name,_ in model.sections()],['准备运行材料','部署到节点'])
         self.assertTrue(all(e.steps==events[0].steps and e.groups==events[0].groups for e in events))
         model.finish('success');self.assertEqual(model.counts(),(2,2))
         self.assertIn(result['batch'].version,model.notes.values())

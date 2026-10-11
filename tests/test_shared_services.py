@@ -8,7 +8,7 @@ from unittest.mock import patch
 from app.network.downloads import fetch
 from app.network.task_progress import TaskCancelled
 from app.network.plans import TaskPlan
-from app.network.models import Site, duplicate_domain, canonical_domain
+from app.network.models import Service, service_policy, Site, duplicate_domain, canonical_domain
 from app.network.certificate_policy import renewal_status
 from app.network.public_tls import REUSED
 from tests import test_public_batch as fixtures
@@ -44,7 +44,7 @@ class SharedServiceTests(unittest.TestCase):
         try:
             app=fixture.app;identity=fixture.record();cert,_=fixture.store_material(identity)
             app.create('sites','Other');cfg=app.snapshot();site=cfg.sites[-1]
-            site.domain='other.example.com';site.source='http://192.0.2.3';site.tls_source='public_ca';site.areas=cfg.sites[0].areas.copy();app.save_configuration(cfg)
+            site.domain='other.example.com';site.source='http://192.0.2.3';site.areas={rid:Service(a.enabled,'public_ca',a.mtls) for rid,a in cfg.sites[0].areas.items()};app.save_configuration(cfg)
             with patch.object(app.public_tls,'validate',wraps=app.public_tls.validate) as validate:
                 report=app.batches.inspect(app.snapshot())
                 self.assertFalse(report.errors);self.assertEqual(validate.call_count,1)

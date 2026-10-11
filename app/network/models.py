@@ -7,8 +7,8 @@ import re
 import hashlib
 import json
 
-MODES = ('disabled', 'http', 'https', 'https_mtls')
-PORTS = ('HTTP', 'HTTPS', tr('中继 HTTPS'))
+MODES = ('disabled', 'https')
+PORTS = ('HTTPS', tr('中继 HTTPS'))
 PLATFORMS = ('debian_13', 'openwrt_25_12')
 ARCHES = ('amd64', 'arm64', 'armv7', '386')
 RELAY_SERVER_NAME = 'relay.smooth-caddy.internal'
@@ -18,13 +18,14 @@ TLS_SOURCES = ('private_ca', 'public_ca')
 class Region:
     id: str
     name: str
-    ports: list[str] = field(default_factory=lambda: ['80', '443', '8443'])
+    tls_source: str = 'private_ca'
+    mtls: bool = False
 
 @dataclass
 class Listen:
     enabled: bool = False
     ips: list[str] = field(default_factory=list)
-    overrides: list[str | None] = field(default_factory=lambda: [None, None, None])
+    ports: list[str] = field(default_factory=lambda: ['80', '443', '8443'])
 
 @dataclass
 class Node:
@@ -37,13 +38,19 @@ class Node:
     ssh_hops: list[list[str]] = field(default_factory=list)
 
 @dataclass
+class Service:
+    enabled: bool = False
+    tls_source: str | None = None
+    mtls: bool | None = None
+
+@dataclass
 class Site:
     id: str
     name: str
     domain: str = ''
     source: str = ''
-    areas: dict[str, str] = field(default_factory=dict)
-    tls_source: str = 'private_ca'
+    areas: dict[str, Service] = field(default_factory=dict)
+    verify_origin_https: bool = False
 
 @dataclass
 class Configuration:
@@ -51,7 +58,6 @@ class Configuration:
     nodes: list[Node] = field(default_factory=list)
     sites: list[Site] = field(default_factory=list)
     revision: int = 0
-    verify_origin_https: bool = True
 
     def to_dict(self):
         validate_enum_values(self)
@@ -59,11 +65,11 @@ class Configuration:
 
     @classmethod
     def from_dict(cls, value):
-        required = {'regions', 'nodes', 'sites', 'revision', 'verify_origin_https'}
+        required = {'regions', 'nodes', 'sites', 'revision'}
         if set(value) != required:
             raise ValueError(tr('配置格式不受支持'))
-        if type(value['verify_origin_https']) is not bool:
-            raise ValueError(tr('源头 HTTPS 校验设置必须为布尔值'))
+        if any('verify_origin_https' not in site for site in value['sites']):
+            raise ValueError(tr('配置格式不受支持'))
         nodes = []
         for original in value['nodes']:
             n = dict(original)
@@ -74,7 +80,7 @@ class Configuration:
             n['areas'] = {k: Listen(**v) for k, v in n['areas'].items()}
             nodes.append(Node(**n))
         config = cls([Region(**r) for r in value['regions']], nodes,
-                     [Site(**s) for s in value['sites']], value['revision'], value['verify_origin_https'])
+                     [Site(**{**s,'areas':{rid:Service(**area) for rid,area in s['areas'].items()}}) for s in value['sites']], value['revision'])
         validate_enum_values(config)
         return config
 
@@ -83,17 +89,35 @@ class Configuration:
 
 
 def validate_enum_values(config):
-    """Unknown protocol values are not editable drafts or translated labels."""
+    for region in config.regions:
+        if region.tls_source not in TLS_SOURCES or type(region.mtls) is not bool:
+            raise ValueError(tr('区域服务原则无效'))
     for node in config.nodes:
-        if any(not isinstance(area.ips, list) or any(not isinstance(ip, str) for ip in area.ips) for area in node.areas.values()):
-            raise ValueError(tr('绑定地址必须为 IP 列表'))
-        if not isinstance(node.ssh_hops, list) or any(not isinstance(hop, list) or len(hop) != 1 or not isinstance(hop[0], str) for hop in node.ssh_hops):
+        for area in node.areas.values():
+            if type(area.enabled) is not bool or not isinstance(area.ips,list) or any(not isinstance(ip,str) for ip in area.ips):
+                raise ValueError(tr('绑定地址必须为 IP 列表'))
+            if not isinstance(area.ports,list) or len(area.ports)!=3 or any(not isinstance(p,str) for p in area.ports):
+                raise ValueError(tr('端口配置数量无效'))
+        if not isinstance(node.ssh_hops,list) or any(not isinstance(hop,list) or len(hop)!=1 or not isinstance(hop[0],str) for hop in node.ssh_hops):
             raise ValueError(tr('SSH 每一跳必须恰好包含一个 IP'))
-        if not isinstance(node.upstream_url, str) or node.platform not in ('', *PLATFORMS):
+        if not isinstance(node.upstream_url,str) or node.platform not in ('',*PLATFORMS):
             raise ValueError(tr('节点配置标识不受支持'))
     for site in config.sites:
-        if site.tls_source not in TLS_SOURCES or any(mode not in MODES for mode in site.areas.values()):
-            raise ValueError(tr('站点配置标识不受支持'))
+        if type(site.verify_origin_https) is not bool:
+            raise ValueError(tr('源头 HTTPS 校验设置必须为布尔值'))
+        for service in site.areas.values():
+            if not isinstance(service,Service) or type(service.enabled) is not bool or service.tls_source not in (None,*TLS_SOURCES) or (service.mtls is not None and type(service.mtls) is not bool):
+                raise ValueError(tr('站点配置标识不受支持'))
+
+
+def service_policy(site, region):
+    value=site.areas.get(region.id,Service())
+    return Service(value.enabled,value.tls_source if value.tls_source is not None else region.tls_source,
+                   value.mtls if value.mtls is not None else region.mtls)
+
+
+def public_sites(config):
+    return [site for site in config.sites if any(service_policy(site,r).enabled and service_policy(site,r).tls_source=='public_ca' for r in config.regions)]
 
 
 def valid_port(value):
@@ -120,8 +144,6 @@ def duplicate_domain(sites, value, identity=None):
 
 
 def validate_uniqueness(config):
-    if type(config.verify_origin_https) is not bool:
-        raise ValueError(tr('源头 HTTPS 校验设置必须为布尔值'))
     identities = set()
     for collection in ('regions', 'nodes', 'sites'):
         names = set()
@@ -143,11 +165,6 @@ def configuration_errors(config):
     errors = {}
     def add(page, obj, field, message):
         errors.setdefault((page, obj.id, field), []).append(message)
-    for region in config.regions:
-        if len(region.ports) != 3:
-            add('regions', region, 'p0', tr('必须提供三个默认端口')); continue
-        for i, port in enumerate(region.ports):
-            if not valid_port(port): add('regions', region, f'p{i}', tr('端口必须是 1–65535 的整数'))
     region_ids = {r.id for r in config.regions}
     for node in config.nodes:
         try: ssh_addresses(node.ssh_hops)
@@ -168,10 +185,10 @@ def configuration_errors(config):
             except ValueError as error:
                 add('nodes', node, col, str(error)); addresses = []
             region = config.find('regions', rid)
-            if len(area.overrides) != 3 or len(region.ports) != 3:
+            if len(area.ports) != 3:
                 add('nodes', node, col, tr('端口配置数量无效')); continue
-            for i, override in enumerate(area.overrides):
-                port = region.ports[i] if override is None else override
+            if not valid_port(area.ports[0]):add('nodes',node,col,tr('HTTP 跳转端口无效'))
+            for i, port in enumerate(area.ports[1:]):
                 if not valid_port(port): add('nodes', node, col, PORTS[i] + tr(' 端口无效')); continue
                 for address in addresses:
                     for other, other_port, other_region, other_kind in used:
@@ -194,8 +211,54 @@ def configuration_errors(config):
             if url.port is not None and not 1 <= url.port <= 65535: raise ValueError()
         except ValueError: add('sites', site, 'source', tr('源头须为 http/https 地址，可带端口，不带路径或凭据'))
         for rid, mode in site.areas.items():
-            if rid not in region_ids or mode not in MODES: add('sites', site, 'area:' + rid, tr('区域服务原则无效'))
+            if rid not in region_ids: add('sites', site, 'area:' + rid, tr('区域服务原则无效'))
+    for node in config.nodes:
+        try: http_bindings(config,node)
+        except ValueError as error:
+            for rid,area in node.areas.items():
+                if area.enabled:add('nodes',node,'area:'+rid,str(error))
+        for rid,area in node.areas.items():
+            if not area.enabled or not valid_port(area.ports[0]):continue
+            try:hosts=[ip_address(ip) for ip in binding_addresses(area.ips)]
+            except ValueError:continue
+            for other_id,other in node.areas.items():
+                if not other.enabled or not any(valid_port(p) and int(p)==int(area.ports[0]) for p in other.ports[1:]):continue
+                try:others=[ip_address(ip) for ip in binding_addresses(other.ips)]
+                except ValueError:continue
+                if any(a.version==b.version and (a==b or a.is_unspecified or b.is_unspecified) for a in hosts for b in others):
+                    for identity in dict.fromkeys((rid,other_id)):
+                        add('nodes',node,'area:'+identity,tr('HTTP 跳转端口与 HTTPS 或中继端口冲突'))
     return errors
+
+
+def http_bindings(config, node):
+    """Merge overlapping listeners per family, keeping per-address redirect routes."""
+    entries=[]
+    for region in config.regions:
+        area=node.areas.get(region.id,Listen())
+        if not area.enabled:continue
+        try: hosts=binding_addresses(area.ips)
+        except ValueError:continue  # The area validator reports malformed drafts.
+        routes={canonical_domain(site.domain):area.ports[1] for site in config.sites if service_policy(site,region).enabled}
+        entries.extend((ip_address(host),routes,area.ports[0]) for host in hosts)
+    groups=[]
+    for http_port,family in dict.fromkeys((p,ip.version) for ip,_,p in entries):
+        members=[(ip,routes) for ip,routes,p in entries if ip.version==family and p==http_port]
+        wildcard=next((ip for ip,_ in members if ip.is_unspecified),None)
+        hosts=[wildcard] if wildcard else list(dict.fromkeys(ip for ip,_ in members))
+        for host in hosts:
+            routes={}
+            for ip,targets in members:
+                if not host.is_unspecified and ip!=host:continue
+                for domain,port in targets.items():
+                    key=(str(ip),domain)
+                    # A wildcard overlaps each concrete address; distinct concrete IPs do not.
+                    for (other,name),target in routes.items():
+                        if name==domain and (ip.is_unspecified or ip_address(other).is_unspecified or other==str(ip)) and (int(target) if valid_port(target) else target)!=(int(port) if valid_port(port) else port):
+                            raise ValueError(tr('HTTP 跳转目标不唯一：')+domain)
+                    routes[key]=port
+            groups.append((str(host),http_port,routes))
+    return groups
 
 
 def binding_addresses(values, *, allow_empty=False):

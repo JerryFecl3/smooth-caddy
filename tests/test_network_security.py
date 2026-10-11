@@ -30,7 +30,7 @@ class SecurityTests(unittest.TestCase):
                           app.certificates.reset, app.ssh.reset, app.ssh.private,
                           lambda:app.certificates.export_p12(client,'export'),
                           lambda:app.releases.delete('missing'),
-                          app.releases.create]:
+                          app.releases.prepare, lambda:app.archives.save('locked')]:
             with self.subTest(operation=operation), self.assertRaises(LockedError):operation()
         self.assertEqual(app.ssh.public(),public)
         self.assertEqual(app.certificates.export_trust_ca(),root)

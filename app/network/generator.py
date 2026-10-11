@@ -3,7 +3,7 @@ from ..i18n import tr
 import json
 from ipaddress import ip_address
 from urllib.parse import urlsplit
-from .models import Listen, canonical_domain, configuration_errors, relay_endpoint, RELAY_SERVER_NAME, binding_addresses
+from .models import Listen, canonical_domain, configuration_errors, relay_endpoint, RELAY_SERVER_NAME, binding_addresses, service_policy, http_bindings
 
 
 def address(host, port): return f'[{host}]:{port}' if ':' in host else f'{host}:{port}'
@@ -22,14 +22,15 @@ def generate(config, certificates, version, public_materials=None):
         files[name+'.key'] = material.private_key
     for site in config.sites:
         domain = canonical_domain(site.domain)
-        if any(mode in ('https','https_mtls') for mode in site.areas.values()):
-            if site.tls_source=='public_ca':
+        sources={service_policy(site,r).tls_source for r in config.regions if service_policy(site,r).enabled}
+        for source in sources:
+            name='site-'+site.id+'-'+source
+            if source=='public_ca':
                 if not public_materials or site.id not in public_materials:raise ValueError(tr('缺少公共证书：')+site.name)
                 cert,key=public_materials[site.id]
-                shared['site-'+site.id+'.pem']=cert
-                shared['site-'+site.id+'.key']=key
+                shared[name+'.pem']=cert;shared[name+'.key']=key
             else:
-                add_material(shared, 'site-'+site.id, certificates.leaf('tls', 'site-'+site.id, dns=domain), 'tls')
+                add_material(shared,name,certificates.leaf('tls','site-'+site.id,dns=domain),'tls')
     for node in config.nodes:
         for rid, area in node.areas.items():
             if area.enabled:
@@ -70,13 +71,13 @@ def generate(config, certificates, version, public_materials=None):
                 dial=address(upstream.hostname,upstream.port or (443 if upstream.scheme=='https' else 80))
                 if upstream.scheme=='https':
                     transport['tls']={'server_name':upstream.hostname}
-                    if not config.verify_origin_https: transport['tls']['insecure_skip_verify']=True
+                    if not site.verify_origin_https: transport['tls']['insecure_skip_verify']=True
             return {'handler':'reverse_proxy','upstreams':[{'dial':dial}],'transport':transport,
                     'headers':{'request':{'set':{'Host':['{http.request.hostport}']}}}}
         for region in config.regions:
             area=node.areas.get(region.id,Listen())
             if not area.enabled: continue
-            ports=[area.overrides[i] or region.ports[i] for i in range(3)]
+            ports=area.ports[1:]
             def server(kind, port, routes, policies=None, strict=True):
                 entry={'listen':[f'tcp{ip_address(ip).version}/'+address(ip,port) for ip in binding_addresses(area.ips)],'routes':routes+[route(None,deny())],
                        'automatic_https':{'disable':True},'protocols':['h1','h2'],'strict_sni_host':strict}
@@ -85,28 +86,34 @@ def generate(config, certificates, version, public_materials=None):
                 return entry
             http=[];https=[];policies=[]
             for site in config.sites:
-                mode=site.areas.get(region.id,'disabled');domain=canonical_domain(site.domain)
-                if mode=='http': http.append(route(domain,proxy(site)))
-                elif mode in ('https','https_mtls'):
-                    target='https://'+domain+(':'+ports[1] if ports[1]!='443' else '')+'{http.request.uri}'
-                    http.append(route(domain,{'handler':'static_response','status_code':308,'headers':{'Location':[target]}}))
+                service=service_policy(site,region);domain=canonical_domain(site.domain)
+                if service.enabled:
                     https.append(route(domain,proxy(site)))
-                    policy=certificate('site-'+site.id);policy['match']={'sni':[domain]}
-                    if mode=='https_mtls':
+                    policy=certificate('site-'+site.id+'-'+service.tls_source);policy['match']={'sni':[domain]}
+                    if service.mtls:
                         policy['client_authentication']=auth('client-ca.pem',[n for n in shared if n.startswith('client-') and n!='client-ca.pem'])
                     policies.append(policy)
-            server('http',ports[0],http)
             if policies:
-                entry = server('https',ports[1],https,policies)
+                entry = server('https',ports[0],https,policies)
                 # Detect plaintext before TLS; relay listeners must remain TLS-only.
                 entry['listener_wrappers'] = [{'wrapper':'http_redirect'}, {'wrapper':'tls'}]
             identity=f'relay-{node.id}-{region.id}'
             policy=certificate(identity)
             policy['client_authentication']={'mode':'require_and_verify','ca':pool('relay-ca.pem')}
-            relay=server('relay',ports[2],[route(canonical_domain(s.domain),proxy(s)) for s in config.sites],[policy],strict=False)
+            relay=server('relay',ports[1],[route(canonical_domain(s.domain),proxy(s)) for s in config.sites],[policy],strict=False)
             # Authenticated relay peers may forward original request headers. Their TCP
             # addresses can differ from listener addresses due to network routing/NAT.
             relay['trusted_proxies']={'source':'static','ranges':['0.0.0.0/0','::/0']}
+        for index,(host,http_port,targets) in enumerate(http_bindings(config,node)):
+            redirects=[]
+            for (local,domain),port in targets.items():
+                target='https://'+domain+(':'+port if port!='443' else '')+'{http.request.uri}'
+                entry=route(domain,{'handler':'static_response','status_code':308,'headers':{'Location':[target]}})
+                if ip_address(host).is_unspecified and not ip_address(local).is_unspecified:
+                    entry['match'][0]['expression']='{http.request.local.host} == "'+local+'"'
+                redirects.append(entry)
+            servers['http-'+str(index)]={'listen':[f'tcp{ip_address(host).version}/'+address(host,http_port)],
+                'routes':redirects+[route(None,deny())], 'automatic_https':{'disable':True},'protocols':['h1']}
         document={'admin':{'disabled':True},'apps':{'http':{'servers':servers},'tls':{'certificates':{'load_files':list(loads.values())}}}}
         files['caddy.json']=(json.dumps(document,ensure_ascii=False,indent=2)+'\n').encode()
         result[node.id]=files

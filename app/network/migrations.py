@@ -8,7 +8,7 @@ import sqlite3
 from uuid import uuid4
 from .models import Configuration
 
-DATABASE_VERSION = 6
+DATABASE_VERSION = 10
 
 
 def legacy_configuration(value):
@@ -94,6 +94,45 @@ def configuration_v5(value):
         for area in node['areas'].values():
             ip = area.pop('ip')
             area['ips'] = [ip] if ip else []
+    return configuration_v7(value)
+
+
+def configuration_v7(value):
+    """Resolve former ports and copy old service choices into explicit policies."""
+    value=deepcopy(value)
+    regions={r["id"]:r for r in value["regions"]}
+    for node in value["nodes"]:
+        for rid,area in node["areas"].items():
+            defaults=regions.get(rid,{}).get("ports",["80","443","8443"])
+            ports=[p if p is not None else defaults[i] for i,p in enumerate(area.pop("overrides"))]
+            area["ports"]=ports
+    for site in value["sites"]:
+        source=site.pop("tls_source")
+        if source not in ("private_ca","public_ca") or any(mode not in ("disabled","http","https","https_mtls") for mode in site["areas"].values()):raise ValueError(tr("站点配置标识不受支持"))
+        site["areas"]={rid:{"enabled":mode!="disabled","tls_source":"private_ca" if mode=="http" else source,"mtls":mode=="https_mtls"} for rid,mode in site["areas"].items()}
+    for region in value["regions"]:
+        region.pop("ports")
+        region.update(tls_source="private_ca",mtls=False)
+    return configuration_v9(value)
+
+
+def configuration_v8(value):
+    value=deepcopy(value)
+    for node in value["nodes"]:
+        port=node.pop("http_port")
+        for area in node["areas"].values():area["ports"]=[port,*area["ports"]]
+    return configuration_v9(value)
+
+
+def configuration_v9(value):
+    """Preserve the global origin verification choice on each existing site."""
+    value=deepcopy(value)
+    verify=value.pop('verify_origin_https')
+    if type(verify) is not bool:
+        raise ValueError(tr('源头 HTTPS 校验设置必须为布尔值'))
+    for site in value['sites']:
+        if 'verify_origin_https' in site:raise ValueError(tr('配置格式不受支持'))
+        site['verify_origin_https']=verify
     return Configuration.from_dict(value)
 
 
@@ -103,7 +142,7 @@ def migrate_database(db, path, version):
     if row is None:
         raise ValueError(tr('旧数据库缺少配置记录'))
     revision, payload = row
-    config = {2: legacy_configuration, 3: configuration_v3, 4: configuration_v4, 5: configuration_v5}[version](json.loads(payload))
+    config = {2: legacy_configuration, 3: configuration_v3, 4: configuration_v4, 5: configuration_v5, 6: configuration_v7, 7: configuration_v7, 8: configuration_v8, 9: configuration_v9}[version](json.loads(payload))
     if config.revision != revision:
         raise ValueError(tr('旧数据库配置修订号不一致'))
     directory = Path(path).parent / 'backups'

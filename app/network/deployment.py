@@ -195,17 +195,18 @@ class Deployment:
                 if arch!=node.arch:installed=None
         return installed
 
-    async def execute(self,batch,version,confirm_host,decide,progress,task_progress,cancel,on_batch=lambda _:None):
+    async def execute(self,batch,version,confirm_host,decide,progress,task_progress,cancel,on_batch=lambda _:None,*,node_ids=None):
         """Generate if requested, probe, assemble per-node binaries, deploy and clean."""
         from .task_progress import TaskCancelled
         self.app.security.require()
         if not re.fullmatch(r'v\d+\.\d+\.\d+',version):raise ValueError(tr('版本须为 vX.Y.Z'))
-        config=self.app.releases.load(batch)[0] if batch else self.app.snapshot()
+        if batch is not None: raise ValueError(tr('部署和导出仅支持当前设置'))
+        source_config=self.app.snapshot()
+        config=self.app.batches.select_nodes(source_config,node_ids)
         nodes=config.nodes
-        if not nodes:raise ValueError(tr('配置批次没有节点'))
-        new=batch is None
-        batch_plan=self.app.batches.plan(config) if new else None
-        plan=batch_plan.tasks.join(deployment_plan(config)) if new else deployment_plan(config)
+        if not nodes:raise ValueError(tr('请先添加节点'))
+        batch_plan=self.app.batches.plan(config)
+        plan=batch_plan.tasks.join(deployment_plan(config))
         def checkpoint():
             if cancel.is_set():raise TaskCancelled(tr('已停止后续工作'))
         def step(i,status=''):
@@ -214,13 +215,16 @@ class Deployment:
         async def deliver(callback,value):callback(value)
         def report(callback,value):asyncio.run_coroutine_threadsafe(deliver(callback,value),loop).result()
         step(plan.ids[0])
-        if new:
-            batch=await asyncio.to_thread(self.app.batches.create,
-                  lambda value:report(progress,value),task_progress=lambda update:report(task_progress,plan.map(update)),cancel=cancel,config=config,plan=batch_plan)
+        batch=await asyncio.to_thread(self.app.batches.create,
+              lambda value:report(progress,value),task_progress=lambda update:report(task_progress,plan.map(update)),cancel=cancel,config=config,plan=batch_plan,source_config=source_config)
+        try:
             on_batch(batch)
-            captured=self.app.releases.load(batch)[0]
-            if captured.to_dict()!=config.to_dict():raise ValueError(tr('生成时配置发生变化，请选择已生成的配置批次重新部署'))
-        else:on_batch(batch)
+            return await self._execute_prepared(batch,version,config,nodes,plan,checkpoint,step,report,confirm_host,decide,progress,task_progress,cancel)
+        finally:
+            batch.materials.clear()
+
+    async def _execute_prepared(self,batch,version,config,nodes,plan,checkpoint,step,report,confirm_host,decide,progress,task_progress,cancel):
+        from .task_progress import TaskCancelled
         include=set()
         for i,node in enumerate(nodes):
             while True:

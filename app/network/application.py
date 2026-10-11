@@ -2,7 +2,7 @@
 from ..i18n import tr
 from copy import deepcopy
 from uuid import uuid4
-from .models import Region, Node, Site, Listen, validate_uniqueness
+from .models import Region, Node, Site, Listen, Service, validate_uniqueness
 from .storage import Store
 from .security import Security
 from .certificates import Certificates, validate_certificate_name, CA_SUFFIXES
@@ -16,6 +16,8 @@ class Application:
         self.security = Security(self.store)
         self.certificates = Certificates(self.store, self.security)
         self.releases = Releases(self)
+        from .archives import Archives
+        self.archives = Archives(self)
         self.ssh = SSH(self.store, self.security)
         self.deployment = Deployment(self)
         self.public_tls = PublicTLS(self)
@@ -37,7 +39,7 @@ class Application:
         config = self.snapshot()
         if config.revision == 0 and not (config.regions or config.nodes or config.sites):
             private, public, router = (uuid4().hex for _ in range(3))
-            config.regions = [Region(private, 'Private'), Region(public, 'Public')]
+            config.regions = [Region(private, 'Private'), Region(public, 'Public', mtls=True)]
             config.nodes = [Node(router, 'HomeRouter',
                 areas={private: Listen(True,['192.168.1.1'])},
                 platform='openwrt_25_12', arch='armv7', ssh_hops=[['192.168.1.1']])]
@@ -49,9 +51,9 @@ class Application:
                     platform='debian_13', arch=arch, ssh_hops=[['192.168.1.1'], [ip]]))
             config.sites = [
                 Site(uuid4().hex, 'Blog', 'blog.myabc.com', 'http://192.168.1.50:80',
-                     {private: 'https', public: 'https'}),
+                     {private: Service(True), public: Service(True)}),
                 Site(uuid4().hex, 'Dashboard', 'dash.myabc.com', 'http://192.168.1.60:8000',
-                     {private: 'https', public: 'https_mtls'}, 'public_ca'),
+                     {private: Service(True), public: Service(True)}),
             ]
             self.save_configuration(config)
 

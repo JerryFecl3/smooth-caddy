@@ -60,7 +60,7 @@ the database directly at `~/.smooth-caddy/smooth-caddy.db`. Exports always use
 - Conventionally increase Z for each commit; persistent data-format changes increase Y and reset Z. This is a documentation convention, not an automated commit gate.
 - GitHub release builds are triggered by version-tag pushes, not ordinary branch commits; read the triggering tag and its commit. Initial targets: Linux x64 and Windows x64.
 - Data migrations and compatibility layers are permitted. Support starts from the first formal release; back up before migrations and reject writes to newer formats.
-- Current database format is 6 (automatic backed-up migration from 2, 3, 4 or 5); new batch metadata is 5, with read-only decoding of metadata 1, 2, 3 and 4. Persist stable configuration identifiers, never translated display labels.
+- Current database format is 10 (backed-up migration from 2–9). Settings archive / JSON format is 4 (reads 1, 2, 3 and 4). Legacy batch metadata 1–5 is decoded read-only for one-time settings extraction. New runtime materials are ephemeral, not persistent batches. Persist stable identifiers, never translated labels.
 - Public repository, MIT project license; preserve third-party license obligations. Keep private data, backups, caches and generated exports out of Git.
 
 - SSH paths are independent of business upstreams: `ssh_hops` stores one IP per hop in a singleton list; host trust is scoped to the route prefix.
@@ -68,3 +68,11 @@ the database directly at `~/.smooth-caddy/smooth-caddy.db`. Exports always use
 - Nodes have a free HTTPS `upstream_url`, no parent references or mode enum. Relay TLS validates the dedicated relay CA and fixed `relay.smooth-caddy.internal` name; relay mTLS has no per-node leaf allowlist. Keep user mTLS authorization separate.
 
 - Region bind addresses use `ips` lists with one shared port set. Generate explicit tcp4/tcp6 listeners; wildcard overlap checks stay within each address family and node.
+
+- Regions hold TLS source and mTLS defaults only. Site-region Service overrides use null for inheritance. Node regions independently own HTTP/HTTPS/relay ports; HTTP is redirect-only.
+
+- Prefer visible radio candidates for small exclusive choices and checkboxes for booleans; avoid dropdowns when practical.
+
+- Verify user-requested changes, but build packages only when requested. For requested local builds, use an explicitly local/dirty build identity for uncommitted work; do not create release tags or push unless requested.
+
+- Origin HTTPS verification belongs to each Site, defaults off, and is edited alongside its source URL. Migrate the former global value to existing sites without changing behavior.

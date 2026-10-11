@@ -114,7 +114,7 @@ async def check():
                 assert len(ui.screen_stack) == 1
                 assert not ui.query('#language')
                 assert PAGES['nodes'] == 'Nodes'
-                for key in ('f1', 'f2', 'f3', 'f4', 'f5', 'f6'):
+                for key in ('f1', 'f2', 'f3', 'f6', 'f4', 'f5'):
                     await pilot.press(key)
                     await pilot.pause()
                 assert options(['direct'])[0][1] == 'direct'

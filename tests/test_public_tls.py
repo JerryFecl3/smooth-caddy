@@ -155,7 +155,7 @@ class PublicTLSUITests(unittest.IsolatedAsyncioTestCase):
             service=Application(directory);service.security.setup('secret');ui=Terminal(service)
             try:
                 async with ui.run_test(size=(140,40)) as pilot:
-                    await pilot.press('f6');await pilot.pause()
+                    await pilot.press('f5');await pilot.pause()
                     self.assertEqual(ui.page,'public_tls')
                     self.assertEqual(len(ui.screen_stack),1)
                     page=ui.screen

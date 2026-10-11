@@ -6,7 +6,7 @@ from pathlib import Path
 from app.network.application import Application
 from app.network.package_crypto import encrypt_payload, encrypt_package
 from app.network.releases import build_package
-from app.network.models import Node
+from app.network.models import Service, service_policy, Node
 
 class PackageCryptoTests(unittest.TestCase):
     def test_openssl_interoperability_and_wrong_password(self):

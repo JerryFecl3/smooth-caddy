@@ -17,8 +17,6 @@ class State:
     @property
     def clients(self): return self.application.certificates.clients()
     @property
-    def releases(self): return self.application.releases.list()
-    @property
     def initialized(self): return self.application.certificates.initialized
     @property
     def unlocked(self): return self.application.security.unlocked

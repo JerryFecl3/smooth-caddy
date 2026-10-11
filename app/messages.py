@@ -35,7 +35,16 @@ EN = {'个人网络 Caddy 配置与证书管理': 'Caddy configuration and certi
  '值': 'Value',
  '未填写': 'Not set',
  '服务域名': 'Domain',
- '源头地址': 'Origin URL',
+ '请输入保存路径': 'Enter a save path',
+ '保存路径不能是目录': 'The save path must be a file, not a directory',
+ '设置': 'Settings',
+ '载入': 'Load',
+ '新增存档': 'New archive',
+ '导入配置': 'Import configuration',
+ '导出存档': 'Export archive',
+ '将替换当前配置，不自动保存旧设置，也不创建新存档。': 'Replaces the current configuration without saving it or creating a new archive.',
+ '确认后直接应用于当前配置，不创建新存档。': 'Applies directly to the current configuration after confirmation; no archive is created.',
+ '源地址': 'Origin URL',
  '保存': 'Save',
  '取消': 'Cancel',
  '确认': 'Confirm',
@@ -292,7 +301,7 @@ EN = {'个人网络 Caddy 配置与证书管理': 'Caddy configuration and certi
  '未填写 IP': 'IP not set',
  '已删除：': 'Deleted: ',
  '删除 ': 'Delete ',
- '校验 HTTPS 源头证书': 'Verify HTTPS origin certificates',
+ '校验 HTTPS 源证书': 'Verify HTTPS origin certificates',
  '导出 P12': 'Export P12',
  '导出信任 CA': 'Export trusted CA',
  '验证通过后将解锁，直至退出程序。': 'Verification unlocks the application until exit.',
@@ -591,3 +600,44 @@ EN.update({
     '每行一个 IP，共用下面的一组端口。0.0.0.0 监听全部 IPv4，:: 监听全部 IPv6。': 'One IP per line, sharing the ports below. 0.0.0.0 binds all IPv4 addresses; :: binds all IPv6 addresses.',
     '{0} {1}（{2}）与{3} {4}（{5}）监听冲突，请修改绑定地址或端口': '{0} {1} ({2}) conflicts with {3} {4} ({5}); change the bind addresses or ports',
 })
+
+EN.update({
+    'JSON 文件路径': 'JSON file path',
+    '仅包含站点、节点、区域及顺序，不含 TLS / mTLS 配置与材料。': 'Sites, nodes, regions and ordering only; excludes TLS / mTLS configuration and materials.',
+    '仅替换站点、节点、区域及站点全局选项；TLS / mTLS 保持不变。不自动保存旧设置。': 'Replace sites, nodes, regions and global site options only. TLS / mTLS remains unchanged. Previous settings are not automatically archived.',
+    '保存存档': 'Save archive', '保存时间': 'Saved at',
+    '停止后续工作并清理本机临时材料。已提交的部署等待结果，不自动回滚。': 'Stop remaining work and clean local temporary materials. Await submitted deployment results; no automatic rollback.',
+    '准备运行材料': 'Prepare runtime materials', '删除存档': 'Delete archive', '删除存档？': 'Delete archive?',
+    '存档': 'Archives', '存档不存在': 'Archive does not exist', '安装包已导出': 'Installer exported',
+    '导入 JSON': 'Import JSON', '导出 .run': 'Export .run', '导出存档 JSON': 'Export archive JSON',
+    '导出当前 JSON': 'Export current JSON', '就绪': 'Ready', '当前设置': 'Current settings',
+    '当前设置：节点 {0} / 站点 {1} / 区域 {2} · {3}': 'Current settings: {0} nodes / {1} sites / {2} regions · {3}',
+    '恢复': 'Restore', '无法准备运行材料': 'Cannot prepare runtime materials', '替换当前设置？': 'Replace current settings?',
+    '设置已导出': 'Settings exported', '设置文件格式无效或版本不受支持': 'Invalid or unsupported settings file format',
+    '设置文件超过 10 MiB': 'Settings file exceeds 10 MiB',
+    '部署和导出仅支持当前设置': 'Deployment and export only support current settings',
+    '部署当前设置': 'Deploy current settings', '配置存在错误': 'Configuration errors', '配置检查通过': 'Configuration checks passed',
+    '选中存档': 'Selected archive',
+})
+
+EN.update({"请选择有效节点":"Select a valid node", "全部节点":"All nodes", "选中节点":"Selected node", "全部导出":"Export all", "全部部署":"Deploy all"})
+
+EN.update({"节点 / SSH 目标":"Node / SSH target"})
+
+EN.update({'HTTP 跳转端口与 HTTPS 或中继端口冲突':'HTTP redirect port conflicts with HTTPS or relay port',
+'HTTP 跳转目标不唯一：':'Ambiguous HTTP redirect target: ', '启用服务':'Enable service', 'mTLS 验证':'mTLS verification',
+'继承区域默认':'Inherit region default', '开启':'On', '继承':'Inherited', 'HTTP 跳转端口':'HTTP redirect port',
+'节点统一的 HTTP 跳转入口，默认 80。':'Node-wide HTTP redirect listener; default port 80.',
+'默认 TLS 来源':'Default TLS source', '默认 mTLS 验证':'Default mTLS verification'})
+
+EN.update({"直连":"Direct", "HTTP 跳转端口为节点共用，修改后应用于所有区域。":"The HTTP redirect port is shared by this node; changes apply to all regions."})
+
+EN.update({'HTTP 跳转端口无效':'Invalid HTTP redirect port'})
+
+EN.update({'自定义配置':'Custom settings','私有CA':'Private CA','公共CA':'Public CA','关闭mTLS':'mTLS off','开启mTLS':'mTLS on'})
+
+EN.update({'SSH 地址':'SSH address','上游':'Upstream','其它节点':'Other node','(经{0}个地址跳转)':'(via {0} jump addresses)'})
+
+EN.update({'中继':'Relay','选择中继时，地址必须指向已存在的中继服务及其 HTTPS 端口。请避免转发环路。':'For relay mode, enter an existing relay service address and HTTPS port. Avoid forwarding loops.'})
+
+EN.update({'未启用':'Not enabled'})

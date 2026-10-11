@@ -51,7 +51,7 @@ class TaskLayoutTests(unittest.IsolatedAsyncioTestCase):
                         panel=TaskProgress('新增并部署',operation,lambda _: '',asynchronous=True)
                         ui.push_screen(panel);await pilot.pause()
                         steps=('生成证书','保存配置','探测 / Router','上传 / Router','部署 / Router')
-                        groups=('生成配置批次',)*2+('部署到节点',)*3
+                        groups=('准备运行材料',)*2+('部署到节点',)*3
                         panel.show_step(TaskStep(steps,0,'已完成',groups,'success'))
                         panel.show_step(TaskStep(steps,1,'20261009-120000',groups,'success'))
                         panel.show_step(TaskStep(steps,2,'v2.11.7',groups,'success'))
@@ -59,7 +59,7 @@ class TaskLayoutTests(unittest.IsolatedAsyncioTestCase):
                         await pilot.pause()
                         content=panel.query_one('#task-step-list',Static)
                         text=content.render().plain
-                        self.assertIn('生成配置批次',text);self.assertIn('部署到节点',text)
+                        self.assertIn('准备运行材料',text);self.assertIn('部署到节点',text)
                         self.assertIn('1 / 2',panel.query_one('#task-summary',Static).render().plain)
                         self.assertTrue(all(cell_len(line)<=content.size.width for line in text.splitlines()))
                         self.assertGreater(panel.query_one('#task-stop').region.height,0)

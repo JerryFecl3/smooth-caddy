@@ -45,15 +45,15 @@ Checkbox:focus > .toggle--label { text-style: bold underline; }
 #sidebar Button { width: 100%; margin-top: 1; margin-right: 0; }
 #nav-note { height: 1fr; margin-top: 0; }
 
-Button.-primary {
+/* Green is navigation state, blue is keyboard focus / the list's Enter action. */
+Button.nav-active, Button.nav-active:hover {
     background: $emphasis;
     color: #e6f4ef;
     border-top: blank $emphasis;
     border-bottom: blank $emphasis;
     text-style: bold;
 }
-Button.-primary:hover { background: $emphasis; border-top: blank $emphasis; }
-Button:focus, Button:focus:hover, Button.-primary:focus, Button.-error:focus {
+Button.list-default, Button.list-default:hover, Button:focus, Button:focus:hover {
     background: $focus-blue;
     color: #ffffff;
     border-top: blank $focus-blue;
@@ -62,6 +62,15 @@ Button:focus, Button:focus:hover, Button.-primary:focus, Button.-error:focus {
     tint: transparent;
     text-style: bold;
 }
+Button.-error, Button.-error:hover, Button.-error:focus, Button.-error:focus:hover {
+    background: $error;
+    color: #ffffff;
+    border-top: blank $error;
+    border-bottom: blank $error;
+    background-tint: transparent;
+    tint: transparent;
+}
+Button.-error:focus, Button.-error:focus:hover { text-style: bold underline; }
 
 
 #nav ListItem.config-error, #nav ListItem.config-error Label { color: #ff6b6b; }
@@ -143,3 +152,20 @@ HelpGuide #form-fields, HelpGuide #form-error { display: none; }
 
 .ssh-path-dialog #dialog { width: 58; }
 .ssh-path-input { width: 100%; height: 6; padding: 0 1; border: solid #507c93; }
+
+#page-summary { height: auto; padding: 1 2; color: #a7b8ce; }
+
+#archive-actions { height: 4; margin: 1 0; overflow-y: hidden; }
+
+#form-fields RadioSet { height: auto; width: 100%; margin-top: 1; padding: 0 1; border: none; background: transparent; }
+#form-fields RadioButton { height: 1; margin: 0; }
+
+/* Use ordinary form checkboxes, with complete borders and content height. */
+#form-fields .choice-row { height: 3; margin: 1 0 0 0; }
+#form-fields .choice-row Checkbox { width: 1fr; height: 3; margin: 0; padding: 0 1; }
+#form-fields .choice-row Checkbox:disabled { opacity: 65%; }
+
+.upstream-dialog #form-fields #value { margin-top: 1; }
+
+#settings-title { height: 2; text-style: bold; color: #d8f5f0; }
+#settings-tabs { height: 5; margin-bottom: 1; border-bottom: solid #29354a; overflow-y: hidden; }

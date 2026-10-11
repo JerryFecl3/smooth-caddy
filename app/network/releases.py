@@ -1,6 +1,7 @@
 """Verified binary cache and atomic release index; no UI dependencies."""
 from ..i18n import tr
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
@@ -134,6 +135,13 @@ class Release:
 
 
 @dataclass
+class Prepared:
+    version: str
+    configuration: object
+    materials: dict
+
+
+@dataclass
 class PackageSet:
     version: str
     caddy: str
@@ -200,7 +208,7 @@ class Releases:
     def _index(self, batches):
         atomic(self.root/'index.json',json.dumps({'format':3,'releases':[asdict(b) for b in batches]},ensure_ascii=False,indent=2).encode())
 
-    def load(self,batch):
+    def load_configuration(self,batch):
         from .models import Configuration
         directory=self.directory(batch)
         payload=(directory/'metadata.json').read_bytes()
@@ -220,7 +228,15 @@ class Releases:
             from .migrations import configuration_v5
             config = configuration_v5(metadata['configuration'])
         else:
-            config = Configuration.from_dict(metadata['configuration'])
+            from .migrations import configuration_v7
+            config = configuration_v7(metadata['configuration'])
+        return config
+
+    def load(self,batch):
+        if isinstance(batch, Prepared): return deepcopy(batch.configuration), batch.materials
+        config=self.load_configuration(batch)
+        directory=self.directory(batch)
+        metadata=json.loads((directory/'metadata.json').read_bytes())
         materials={node.id:{} for node in config.nodes}
         for entry in metadata['files']:
             relative=Path(entry['path'])
@@ -238,49 +254,19 @@ class Releases:
         self.load(batch)
         return batch
 
-    def create(self,progress=lambda _:None,*,task_progress=lambda _:None,cancel=None,config=None,public_materials=None):
+    def prepare(self,progress=lambda _:None,*,task_progress=lambda _:None,cancel=None,config=None,public_materials=None):
+        """Generate only in memory; no release directory or material index is written."""
+        from uuid import uuid4
         self.app.security.require()
-        from .models import configuration_errors
-        config=config or self.app.snapshot()
-        if configuration_errors(config) or not config.nodes:raise ValueError(tr('请添加节点并修正配置错误'))
-        plan=generation_plan(config);steps=plan.steps
-        def step(index):
-            if cancel is not None and cancel.is_set():raise TaskCancelled(tr('已停止生成配置批次'))
-            task_progress(plan.event(plan.ids[index]));progress(steps[index])
-        with self.lock():
-            previous=self.list()
-            while True:
-                stamp=datetime.now().astimezone().strftime('%Y%m%d-%H%M%S')
-                if not (self.root/stamp).exists():break
-                if cancel is not None and cancel.is_set():raise TaskCancelled(tr('已停止'))
-                time.sleep(.1)
-            step(0)
-            materials=generate(config,self.app.certificates,stamp,public_materials)
-            work=Path(tempfile.mkdtemp(prefix='.prepare-',dir=self.app.store.temporary))
-            try:
-                files=[]
-                for i,node in enumerate(config.nodes,1):
-                    step(i)
-                    for name,content in materials[node.id].items():
-                        relative=(Path(node.id)/name).as_posix()
-                        atomic(work/relative,self.app.security.batch_cipher().encrypt(content))
-                        files.append({'path':relative,'size':len(content),'sha256':sha(content)})
-                step(len(steps)-1)
-                created=datetime.now().astimezone().isoformat(timespec='seconds')
-                summary={key:[obj.name for obj in getattr(config,key)] for key in ('nodes','sites','regions')}
-                metadata={'format':5,'version':stamp,'created_at':created,'configuration':config.to_dict(),'files':files}
-                payload=json.dumps(metadata,ensure_ascii=False,indent=2).encode()
-                atomic(work/'metadata.json',payload)
-                batch=Release(stamp,'releases/'+stamp,created,summary,sha(payload))
-                if cancel is not None and cancel.is_set():raise TaskCancelled(tr('已停止'))
-                os.rename(work,self.root/stamp)
-                try:self._index([batch]+previous)
-                except BaseException:
-                    shutil.rmtree(self.root/stamp);raise
-                task_progress(plan.event('metadata',stamp,'success'))
-                return batch
-            finally:
-                if work.exists():shutil.rmtree(work)
+        config=deepcopy(config or self.app.snapshot())
+        plan=generation_plan(config)
+        if cancel is not None and cancel.is_set(): raise TaskCancelled(tr('已停止'))
+        task_progress(plan.event('generate'));progress(tr('生成证书与配置'))
+        stamp=datetime.now().astimezone().strftime('%Y%m%d-%H%M%S')+'-'+uuid4().hex[:8]
+        materials=generate(config,self.app.certificates,stamp,public_materials)
+        if cancel is not None and cancel.is_set(): raise TaskCancelled(tr('已停止'))
+        task_progress(plan.event('generate',stamp,'success'))
+        return Prepared(stamp,config,materials)
 
     def assemble(self,batch,version,include_binary=None,*,destination='packages',progress=lambda _:None,task_progress=lambda _:None,cancel=None,password=None):
         """Build from immutable batch materials. None means all nodes (offline export)."""
@@ -289,6 +275,7 @@ class Releases:
         if destination not in ('packages','tasks'):raise ValueError(tr('输出类型无效'))
         if destination=='packages' and not password:raise ValueError(tr('请输入部署包导出口令'))
         if not re.fullmatch(r'v\d+\.\d+\.\d+',version):raise ValueError(tr('版本须为 vX.Y.Z'))
+        if not isinstance(batch, Prepared): raise ValueError(tr('部署和导出仅支持当前设置'))
         config,materials=self.load(batch)
         included={n.id for n in config.nodes} if include_binary is None else set(include_binary)
         if not included.issubset({n.id for n in config.nodes}):raise ValueError(tr('节点集合无效'))
