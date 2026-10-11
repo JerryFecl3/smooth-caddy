@@ -122,7 +122,14 @@ async def check():
         finally:
             app.close()
 asyncio.run(check())
+print('ENGLISH_UI_OK')
 '''
-        result = subprocess.run([sys.executable, '-c', script], cwd=ROOT,
-                                capture_output=True, text=True, encoding='utf-8', timeout=60)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # Windows children otherwise inherit a code-page encoding while the
+        # parent decodes UTF-8; a reader-thread decode failure can leave None.
+        environment = dict(os.environ, PYTHONIOENCODING='utf-8', PYTHONUTF8='1')
+        result = subprocess.run([sys.executable, '-c', script], cwd=ROOT, env=environment,
+                                capture_output=True, text=True, encoding='utf-8',
+                                errors='backslashreplace', timeout=60)
+        output = (result.stdout or '') + (result.stderr or '')
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIn('ENGLISH_UI_OK', result.stdout or '', output)
