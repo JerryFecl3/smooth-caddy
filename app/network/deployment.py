@@ -139,7 +139,7 @@ class Deployment:
                                         statuses[package.node_id]='success';notify(package.node_id,'success');break
                                     # A query that cannot prove completion is a decision, not permission to rerun.
                                     raise ValueError(tr('部署结果未确认。请在节点检查后选择跳过或停止；不会自动重复部署'))
-                                result=await conn.run('sh '+shlex.quote(remote),check=False)
+                                result=await conn.run('sh '+shlex.quote(remote)+' --take-over',check=False)
                                 if result.exit_status != 0:
                                     message = tr('部署退出码：{0}', result.exit_status)
                                     for label, output in [(tr('标准输出'), result.stdout), (tr('标准错误'), result.stderr)]:

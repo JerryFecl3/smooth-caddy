@@ -22,6 +22,7 @@ class DeploymentTests(unittest.IsolatedAsyncioTestCase):
                 async def run(self,command,**kwargs):
                     if command.startswith('journalctl'):return SimpleNamespace(stdout='bind: address already in use',exit_status=0)
                     if command.startswith('sha256sum'):return SimpleNamespace(stdout='digest file',exit_status=0)
+                    if not command.endswith(' --take-over'): raise AssertionError(command)
                     events.append(('install',self.identity))
                     count=failures.get(self.identity,0)
                     if count:

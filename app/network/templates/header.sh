@@ -2,6 +2,7 @@
 # Self-contained offline installation package.
 set -eu
 umask 077
+case "$#:${1:-}" in 0:|1:--take-over) ;; *) echo 'Usage: sh package.run [--take-over]' >&2; exit 2 ;; esac
 for tool in awk tail tar gzip sha256sum mktemp uname sed grep cut cp mv ln readlink find sort; do
  command -v "$tool" >/dev/null 2>&1 || { echo "Missing tool: $tool" >&2; exit 1; }
 done
@@ -15,6 +16,6 @@ echo '@PAYLOAD_HASH@  '"$work/payload.tar.gz" | sha256sum -c - >/dev/null
 mkdir "$work/payload"
 tar -xzf "$work/payload.tar.gz" -C "$work/payload"
 (cd "$work/payload" && sha256sum -c SHA256SUMS >/dev/null)
-sh "$work/payload/manage.sh" install "$work/payload"
+sh "$work/payload/manage.sh" install "$work/payload" "$@"
 exit $?
 __CADDY_PAYLOAD__

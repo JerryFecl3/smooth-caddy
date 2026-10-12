@@ -185,7 +185,7 @@ class ReleaseTests(unittest.TestCase):
             manifest=tar.extractfile('release/manifest').read().decode()
             version=next(line.removeprefix('release=') for line in manifest.splitlines() if line.startswith('release='))
             self.assertEqual(version,batch.version)
-            functions=script.decode().split('case "${1:-}" in',1)[0]
+            functions=script.decode().split('\ncase "${1:-}" in',1)[0]
             checked=subprocess.run(['sh','-c',functions+'\nvalid_release "$1"','test',version],capture_output=True)
             self.assertEqual(checked.returncode,0,checked.stderr)
         package=(self.app.releases.directory(release)/release.packages[0].filename)

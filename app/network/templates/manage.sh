@@ -30,6 +30,18 @@ cleanup_objects() {
   [ "$referenced" = 1 ] || rm -rf "$obj"
  done
 }
+check_node_identity() {
+ case "${1:-}" in ''|--take-over) ;; *) fail 'Unknown installation option' ;; esac
+ [ -f "$STATE/node-id" ] || return 0
+ previous_node=$(cat "$STATE/node-id")
+ [ "$previous_node" != "$node_id" ] || return 0
+ [ "${1:-}" != --take-over ] || return 0
+ printf 'This machine was deployed as node %s; this package is for node %s.\n' "$previous_node" "$node_id" >&2
+ printf 'Replace the existing deployment and take over this node? [y/N] ' >&2
+ answer=''
+ read -r answer || fail 'Node takeover not confirmed; deployment unchanged'
+ case "$answer" in y|Y|yes|YES) ;; *) fail 'Node takeover cancelled; deployment unchanged' ;; esac
+}
 manager_pid() {
  if [ "$PLATFORM" = debian ]; then
   systemctl show smooth-caddy.service --property=MainPID --value
@@ -184,9 +196,7 @@ case "${1:-}" in
   [ "$(field "$payload/release" format)" = 1 ] || fail 'Unsupported package format'
   node_id=$(field "$payload/release" node_id)
   echo "$node_id" | grep -Eq '^[a-f0-9]{32}$' || fail 'Invalid node identity'
-  if [ -f "$STATE/node-id" ]; then
-   [ "$(cat "$STATE/node-id")" = "$node_id" ] || fail 'Package belongs to a different node'
-  fi
+  check_node_identity "${3:-}"
   if [ -f "$payload/caddy" ]; then
    mkdir -p "$(dirname "$binary")"
    expected=$(field "$payload/release" binary_sha256)
