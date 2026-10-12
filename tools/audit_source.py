@@ -4,7 +4,7 @@ import re
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
-ROOT_FILES={'.gitignore','.gitattributes','AGENTS.md','LICENSE','README.md','THIRD_PARTY_NOTICES.md','Makefile','pyproject.toml','requirements.txt','requirements-build.txt','smooth_caddy.py'}
+ROOT_FILES={'.gitignore','.gitattributes','AGENTS.md','LICENSE','README.md','README.en.md','THIRD_PARTY_NOTICES.md','Makefile','pyproject.toml','requirements.txt','requirements-build.txt','smooth_caddy.py'}
 ROOTS={'app','tests','docs','tools','.github'}
 FORBIDDEN={'.db','.sqlite','.p12','.pfx','.key','.pem','.cer','.crt','.log','.pyc','.exe','.run','.zip','.gz'}
 PATTERNS=[re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----[\r\n]+[A-Za-z0-9+/=]{40}'),re.compile(rb'gh[pousr]_[A-Za-z0-9]{30,}'),re.compile(rb'github_pat_[A-Za-z0-9_]{30,}'),re.compile(rb'AKIA[A-Z0-9]{16}')]

@@ -45,8 +45,11 @@ the database directly at `~/.smooth-caddy/smooth-caddy.db`. Exports always use
 - Do not add an extra data directory level such as `~/.smooth-caddy/data/`.
 - Use `app/` imports inside tests and implementation.
 - Prefer small, focused edits and keep CLI behavior covered by `tests/test_app.py`.
-- Treat `README.md` as the documentation entry point.
-- Keep only current documentation in `docs/`: `product.md` owns product behavior; `ca-lite-interface.md` owns the
+- Treat `README.md` as the default Chinese documentation entry point; keep `README.en.md`
+  aligned as its English introduction, with reciprocal language links and matching screenshots.
+- Keep only current documentation in `docs/`: `usage.md` owns user procedures and upgrade guidance;
+  `development.md` owns source setup, testing, versioning and release procedures;
+  `product.md` owns product behavior; `ca-lite-interface.md` owns the
   current Python certificate-module contract and `supertaskrunner.md` owns the task-system
   architecture constraints.
 - Do not add draft, archive, completed-plan, or duplicated command-inventory
@@ -56,7 +59,7 @@ the database directly at `~/.smooth-caddy/smooth-caddy.db`. Exports always use
 
 ## Versioning and compatibility
 
-- Follow README's version/release contract: tags `vX.Y.Z`, artifacts `X.Y.Z.<short-commit>`; initial tag `v0.1.0`.
+- Follow `docs/development.md`'s version/release contract: tags `vX.Y.Z`, artifacts `X.Y.Z.<short-commit>`; initial tag `v0.1.0`.
 - Conventionally increase Z for each commit; persistent data-format changes increase Y and reset Z. This is a documentation convention, not an automated commit gate.
 - GitHub release builds are triggered by version-tag pushes, not ordinary branch commits; read the triggering tag and its commit. Initial targets: Linux x64 and Windows x64.
 - Data migrations and compatibility layers are permitted. Support starts from the first formal release; back up before migrations and reject writes to newer formats.

@@ -365,15 +365,9 @@ TUI 通用弹窗在 `dialogs.py`，区域／节点／站点编辑在 `configurat
 
 自动测试使用临时数据库、网络与 SSH 替身，不等同于真实 DNS 签发、Debian/OpenWrt 实机、自启动、恢复和跨架构验收。
 
-## 程序发布计划
+## 程序发布与文档
 
-版本与标签规则以 [README 的版本与发布约定](../README.md#版本与发布约定) 为准：首次标签 v0.1.0，发布物版本 X.Y.Z.commit；每次提交原则上增加 Z，数据结构变化增加 Y 并将 Z 归零。推送版本标签触发 GitHub 构建，本阶段仅 Linux x64、Windows x64。仓库公开，项目采用 MIT；工作流位于 .github/workflows/release.yml，项目许可文本位于 LICENSE。
-
-开发保留模块化工程目录。GitHub Releases 计划提供独立可执行文件，优先采用 PyInstaller，按运行主机的操作系统与 CPU 架构构建；目标机器无需自行安装 Python。Linux 和 Windows 的运行数据默认保存在当前用户主目录下的 `~/.smooth-caddy/`，不再嵌套 `data/`，发布物不包含用户数据库、私钥、证书或下载缓存。
-
-构建入口为 `tools/build_release.py`，构建依赖位于 `requirements-build.txt`。构建采用精确 Git 标签与提交哈希定版，Linux x64、Windows x64 分别在 GitHub Actions 测试构建，ARM 发布暂缓。发布前须验证资源定位、独立环境启动、数据搬迁和核心操作，确定平台兼容范围、数据升级策略及许可证。程序发布物不同于部署到 Caddy 节点的 `.run` 包。
-
-第三方声明按实际分发物整理：独立程序覆盖内置 Python 与全部随附依赖，含二进制的节点包覆盖 Caddy 及其依赖。发布时随附对应版本要求的许可证、版权及 NOTICE（如有），网页入口仅用于阅读说明。独立程序构建收集并随包携带 Python 依赖许可，build-info.json 记录清单与未识别的系统库。
+程序的版本、构建、发布及第三方许可处理以[开发与发布](development.md)为准；下载、备份与升级步骤见[使用指南](usage.md)。本文件维护配置模型与交互规则，不重复维护操作流程。
 
 项目名称为 Smooth Caddy，命令与服务名为 `smooth-caddy`，源码入口为 `smooth_caddy.py`。数据库文件继续使用 `smooth-caddy.db`；数据库所有权与加密校验常量属于存储格式，不随品牌名改变。旧配置批次固化了旧部署路径，改名后应重新部署当前设置；目标机旧服务须由用户停用，新服务不自动接管旧目录。
 
