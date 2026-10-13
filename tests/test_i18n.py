@@ -29,6 +29,24 @@ class LanguageTests(unittest.TestCase):
                                          in formatter.parse(text) if field is not None)
             self.assertEqual(fields(source), fields(translated), source)
 
+    def test_preferences_persist_across_processes_and_invalid_values_fall_back(self):
+        from app.preferences import load_language, save_language
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(load_language(directory), 'auto')
+            self.assertEqual(list(Path(directory).iterdir()), [])
+            for language, chinese in [('en', False), ('zh-CN', True)]:
+                save_language(directory, language)
+                result = run_python('smooth_caddy.py', '--data-dir', directory, '--help')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual('个人网络' in result.stdout, chinese)
+            path = Path(directory) / 'preferences.json'
+            for invalid in ('invalid', '[]', '{"language": "unknown"}', '{"language": null}'):
+                path.write_text(invalid, encoding='utf-8')
+                self.assertEqual(load_language(directory), 'auto')
+                self.assertEqual(path.read_text(encoding='utf-8'), invalid)
+            with self.assertRaises(ValueError):
+                save_language(directory, 'unknown')
+
     def test_posix_language_detection(self):
         cases = [({}, 'en'), ({'LANG': 'zh_CN.UTF-8'}, 'zh-CN'),
                  ({'LANG': 'zh_TW.UTF-8'}, 'zh-CN'), ({'LANG': 'zh-HK'}, 'zh-CN'),
@@ -88,7 +106,9 @@ from app.i18n import set_language
 set_language('en')
 from app.network.application import Application
 from app.tui.ui import Terminal, PAGES
-from app.tui.dialogs import InitializationDialog
+from app.tui.dialogs import InitializationDialog, Form
+from app.tui.choice_row import ChoiceRow
+from app.preferences import load_language
 from app.tui.labels import options
 from app.tui.guide import usage_guide
 from textual.widgets import Input, Select, Button
@@ -110,7 +130,27 @@ async def check():
                 await wait_until(lambda: len(ui.screen_stack) == 1, description='initialization saved')
                 await pilot.pause()
                 assert len(ui.screen_stack) == 1
-                assert not ui.query('#language')
+                await pilot.press('f6')
+                await pilot.pause()
+                await pilot.press('f9')
+                await wait_for_screen(ui, Form, controls=('#language', '#save'))
+                assert ui.screen_stack[0].query_one('#settings-language').display
+                assert ui.screen.caption == 'Language'
+                assert ui.screen.query_one('#language', ChoiceRow).value == 'auto'
+                await pilot.click('#language-option-2')
+                await pilot.press('ctrl+s')
+                await pilot.pause()
+                assert load_language(directory) == 'zh-CN'
+                await pilot.press('escape')
+                await pilot.pause()
+                await pilot.click('#settings-language')
+                await wait_for_screen(ui, Form, controls=('#language', '#save'))
+                assert ui.screen.query_one('#language', ChoiceRow).value == 'zh-CN'
+                await pilot.click('#language-option-1')
+                await pilot.press('escape')
+                await pilot.pause()
+                assert load_language(directory) == 'zh-CN'
+
                 assert PAGES['nodes'] == 'Nodes'
                 for key in ('f1', 'f2', 'f3', 'f6', 'f4', 'f5'):
                     await pilot.press(key)

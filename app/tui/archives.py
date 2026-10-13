@@ -1,5 +1,6 @@
 """Settings archives: explicit save/restore, JSON interchange, no deployment."""
 from pathlib import Path
+from datetime import datetime
 from ..i18n import tr
 from .dialogs import Field, Form
 
@@ -15,10 +16,11 @@ class ArchivesPage:
 
     def render(self, table):
         self.records=self.service.list()
-        table.add_columns(tr('名称'),tr('保存时间'),tr('节点数'),tr('站点数'),tr('区域数'))
+        for label, minimum, maximum in ((tr('名称'), 12, 40), (tr('保存时间'), 19, 24), (tr('节点数'), 6, 16), (tr('站点数'), 6, 16), (tr('区域数'), 6, 16)):
+            table.add_column(label, min_width=minimum, max_width=maximum)
         for item in self.records:
             c=item['configuration']
-            table.add_row(item['name'],item['created_at'],str(len(c['nodes'])),str(len(c['sites'])),str(len(c['regions'])),key=item['id'])
+            table.add_row(item['name'],datetime.fromisoformat(item['created_at']).astimezone().strftime('%Y-%m-%d %H:%M:%S'),str(len(c['nodes'])),str(len(c['sites'])),str(len(c['regions'])),key=item['id'])
         pos=self.app.positions.get('archives',(0,0))
         table.move_cursor(row=min(pos[0],max(0,len(self.records)-1)))
         for key in ('archive-restore','archive-export','archive-delete'):

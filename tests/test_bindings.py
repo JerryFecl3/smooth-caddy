@@ -107,7 +107,7 @@ class BindingUITests(unittest.IsolatedAsyncioTestCase):
                 table = ui.query_one('#matrix'); table.move_cursor(row=0, column=ui.col_keys.index('area:'+b))
                 await pilot.press('enter'); await pilot.pause()
                 editor = ui.screen.query_one('#ips', TextArea)
-                self.assertEqual(editor.content_size.height, 4)
+                self.assertEqual(editor.content_size.height, 3)
                 editor.load_text('192.0.2.2')
                 await pilot.press('ctrl+s'); await pilot.pause()
                 self.assertEqual(len(ui.screen_stack), 2)
@@ -186,7 +186,9 @@ class BindingUITests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(ui.cell_value(ui.demo.nodes[0],'upstream_url'),'直连')
                 self.assertEqual(ui.cell_value(ui.demo.nodes[1],'upstream_url'),'中继\nhttps://relay.example.com:8443')
                 headings=[str(c.label) for c in table.columns.values()]
-                self.assertIn('SSH 地址',headings);self.assertIn('上游',headings)
+                self.assertIn('SSH',headings);self.assertIn('平台',headings);self.assertIn('上游',headings)
+                for region in ui.demo.regions:
+                    self.assertIn(region.name, headings)
                 table.move_cursor(row=1,column=ui.col_keys.index('upstream_url'));table.focus()
                 await pilot.press('enter');await pilot.pause()
                 self.assertEqual(ui.screen.query_one('#value').value,relay.upstream_url)

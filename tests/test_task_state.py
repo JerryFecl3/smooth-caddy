@@ -20,12 +20,32 @@ class TaskStateTests(unittest.TestCase):
         state.update(TaskStep(steps,1,groups=groups))
         state.update(TaskStep(steps,1,'批次编号',groups,'success'))
         state.update(TaskStep(steps,2,'v2.11.7',groups))
-        self.assertEqual(state.counts(),(1,2))
+        self.assertEqual(state.counts(),(2,4))
         self.assertEqual(state.notes[1],'批次编号')
         state.update(TaskStep(steps,3,'失败',groups,'failed'))
         state.finish('partial')
         self.assertEqual(state.states[3],'failed')
         with self.assertRaises(ValueError):state.update(TaskStep(('changed',),0))
+
+    def test_grouped_progress_counts_each_leaf_and_retry(self):
+        state=TaskState()
+        self.assertEqual(state.counts(),(0,0))
+        steps=('a','b','c','d','e');groups=('small',)+('large',)*4
+        def update(index,status):
+            state.update(TaskStep(steps,index,groups=groups,state=status))
+        update(3,'success')
+        self.assertEqual(state.counts(),(1,5))
+        update(0,'skipped')
+        update(2,'failed')
+        self.assertEqual(state.counts(),(3,5))
+        update(2,'running')
+        self.assertEqual(state.counts(),(2,5))
+        update(2,'success')
+        update(2,'success')
+        self.assertEqual(state.counts(),(3,5))
+        state.finish('stopped')
+        self.assertEqual(state.counts(),(3,5))
+        self.assertEqual(state.notes[1],'未执行')
 
     def test_unstarted_tasks_never_become_success(self):
         state=TaskState();state.update(TaskStep(('a','b'),0,state='success'))
@@ -39,7 +59,7 @@ class TaskLayoutTests(unittest.IsolatedAsyncioTestCase):
         from app.network.application import Application
         from tests.ui_helpers import ReadyTerminal as Terminal
         from app.tui.task_progress import TaskProgress
-        from textual.widgets import Static
+        from textual.widgets import Static, ProgressBar
         from rich.cells import cell_len
         for size in ((80,24),(120,36),(160,48)):
             with tempfile.TemporaryDirectory() as directory:
@@ -60,7 +80,9 @@ class TaskLayoutTests(unittest.IsolatedAsyncioTestCase):
                         content=panel.query_one('#task-step-list',Static)
                         text=content.render().plain
                         self.assertIn('准备运行材料',text);self.assertIn('部署到节点',text)
-                        self.assertIn('1 / 2',panel.query_one('#task-summary',Static).render().plain)
+                        self.assertIn('3 / 5',panel.query_one('#task-summary',Static).render().plain)
+                        bar=panel.query_one('#task-overall',ProgressBar)
+                        self.assertEqual((bar.progress,bar.total),(3,5))
                         self.assertTrue(all(cell_len(line)<=content.size.width for line in text.splitlines()))
                         self.assertGreater(panel.query_one('#task-stop').region.height,0)
                         ui.save_screenshot(f'task-progress-{size[0]}.svg',path=directory)

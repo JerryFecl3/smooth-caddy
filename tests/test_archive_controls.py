@@ -18,7 +18,7 @@ class ArchiveControlsTests(unittest.IsolatedAsyncioTestCase):
             async with ui.run_test(size=(140,40)) as pilot:
                 await pilot.press('f6');await pilot.pause()
                 self.assertTrue(ui.query_one('#settings-import').is_on_screen)
-                self.assertEqual(ui.query_one('#settings-import').parent.id,'settings-tabs')
+                self.assertEqual(ui.query_one('#settings-import').parent.id,'settings-tools')
                 await pilot.click('#settings-import');await pilot.pause()
                 self.assertIn('不创建新存档',ui.screen.note)
                 ui.screen.query_one('#path',Input).value=str(source)

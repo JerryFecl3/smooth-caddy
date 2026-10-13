@@ -1,63 +1,49 @@
 $focus-blue: #0078d4;
 $emphasis: #24544d;
 Screen { background: #10151e; color: #d9e2ee; }
-#brand { height: 3; padding: 1 2; text-style: bold; background: $emphasis; color: #e6f4ef; }
 #workspace { height: 1fr; }
-#sidebar { width: 20; background: #141d2b; border-right: solid #29354a; padding: 1; }
-Screen.english #sidebar { width: 26; }
-#nav { height: auto; background: transparent; }
-ListItem { height: 3; padding: 1 1 0 1; }
-ListItem.active-page { background: $emphasis; color: #90d7d1; text-style: bold; }
+#nav > ListItem { background: #262626; color: #d9e2ee; }
+#nav > ListItem:hover { background: #363636; color: #ffffff; }
+#nav > ListItem.active-page, #nav > ListItem.active-page:hover { background: $emphasis; color: #90d7d1; text-style: bold; }
 #nav:focus > ListItem.-highlight { background: $focus-blue; }
-#main { width: 1fr; padding: 1 2 0 2; }
-#matrix { height: 1fr; background: #10151e; border: solid #28364b; }
-#matrix:focus { border: solid #5c9fa8; }
-DataTable > .datatable--header { background: #233149; color: #c8d9ed; text-style: bold; }
-DataTable > .datatable--cursor { background: $focus-blue; color: #ffffff; text-style: bold; }
 DataTable > .datatable--header-cursor { background: $focus-blue; color: #ffffff; }
 DataTable > .datatable--fixed { background: transparent; }
-#actions { height: 4; margin: 1 0; overflow-x: auto; overflow-y: hidden; }
-Button { width: auto; min-width: 16; margin-right: 1; text-align: center; content-align: center middle; }
+Button {
+    height: 3; width: auto; min-width: 6; margin-right: 1; padding: 0 1;
+    border: none; background: #262626; color: #d9e2ee;
+    text-align: center; content-align: center middle; text-style: none;
+    background-tint: transparent; tint: transparent;
+}
+Button:hover { background: #363636; color: #ffffff; }
+.dialog-actions Button:last-child { margin-right: 0; }
 .invalid { color: #ffb4a2 !important; }
 #ca-panel { height: 1fr; padding: 1 2; border: solid #28364b; }
 Form, PasswordDialog, Export { align: center middle; background: #000000 65%; }
-#dialog { width: 72; max-width: 95%; height: auto; max-height: 95%; padding: 1 2; border: thick #507c93; background: #182335; }
-#dialog-title { height: auto; min-height: 2; text-style: bold; color: #d8f5f0; }
+#dialog { width: 72; max-width: 95%; height: auto; max-height: 95%; padding: 1 2; border: thick #507c93; background: #202020; }
+#dialog-title { height: auto; min-height: 1; text-style: bold; color: #d8f5f0; }
 #dialog-note { height: auto; margin-bottom: 1; color: #a7b8ce; }
 #form-fields { height: auto; max-height: 24; }
-#form-fields Label { margin-top: 1; color: #c1d0e3; }
-#form-fields Input, #form-fields Select { margin-bottom: 0; }
-#form-fields Checkbox { margin-top: 1; }
+#form-fields Label { margin-top: 0; color: #c1d0e3; }
+#form-fields Select { margin-bottom: 0; }
 #form-error { height: auto; min-height: 1; color: #ffb4a2; }
 .dialog-actions { height: 3; align-horizontal: right; margin-top: 1; }
 
-.port-row { height: 3; margin-top: 1; }
-#form-fields .port-row Checkbox { width: 1fr; margin: 0; }
-#form-fields .port-row Input { width: 12; }
+.port-row { height: 3; margin-top: 0; }
+#form-fields .port-row Checkbox { width: 1fr; }
 #ca-info { height: auto; }
 #ssh-info { height: auto; margin-top: 1; color: #a9c8f2; }
-Checkbox > .toggle--button { color: #c4d0df; background: #233149; text-style: bold; }
-Checkbox.-on > .toggle--button { color: #10151e; background: #99dbd4; text-style: bold; }
-Checkbox:focus { background: #345372; }
-Checkbox:focus > .toggle--label { text-style: bold underline; }
-
-
-#sidebar Button { width: 100%; margin-top: 1; margin-right: 0; }
-#nav-note { height: 1fr; margin-top: 0; }
 
 /* Green is navigation state, blue is keyboard focus / the list's Enter action. */
 Button.nav-active, Button.nav-active:hover {
     background: $emphasis;
-    color: #e6f4ef;
-    border-top: blank $emphasis;
-    border-bottom: blank $emphasis;
+    color: #90d7d1;
+    border: none;
     text-style: bold;
 }
 Button.list-default, Button.list-default:hover, Button:focus, Button:focus:hover {
     background: $focus-blue;
     color: #ffffff;
-    border-top: blank $focus-blue;
-    border-bottom: blank $focus-blue;
+    border: none;
     background-tint: transparent;
     tint: transparent;
     text-style: bold;
@@ -65,13 +51,15 @@ Button.list-default, Button.list-default:hover, Button:focus, Button:focus:hover
 Button.-error, Button.-error:hover, Button.-error:focus, Button.-error:focus:hover {
     background: $error;
     color: #ffffff;
-    border-top: blank $error;
-    border-bottom: blank $error;
+    border: none;
     background-tint: transparent;
     tint: transparent;
 }
 Button.-error:focus, Button.-error:focus:hover { text-style: bold underline; }
-
+Button:disabled, Button:disabled:hover {
+    background: #202020; color: #777777; text-style: none;
+    border: none; opacity: 100%; background-tint: transparent; tint: transparent;
+}
 
 #nav ListItem.config-error, #nav ListItem.config-error Label { color: #ff6b6b; }
 
@@ -86,7 +74,6 @@ Export #versions {
     scrollbar-gutter: stable;
     overflow-y: scroll;
 }
-Export .dialog-actions Button:last-child { margin-right: 0; }
 
 Export #version-refresh { width: 100%; height: 1; color: #a7b8ce; padding: 0 1; }
 
@@ -117,9 +104,8 @@ DataTable > .datatable--header-hover {
 #public-key-scroll { height: auto; max-height: 3; overflow-x: auto; overflow-y: hidden; }
 #public-key { width: auto; height: 1; }
 
-
 TaskProgress { align: center middle; background: #000000 65%; }
-#task-dialog { width: 88; max-width: 95%; height: auto; max-height: 95%; padding: 1 2; border: thick #507c93; background: #182335; }
+#task-dialog { width: 88; max-width: 95%; height: auto; max-height: 95%; padding: 1 2; border: thick #507c93; background: #202020; }
 #task-overall, #task-current { width: 100%; margin: 1 0; }
 #task-steps { height: auto; max-height: 60vh; margin-bottom: 1; }
 #task-step-list, #task-summary, #task-bytes, #task-elapsed { height: auto; }
@@ -132,7 +118,6 @@ TaskProgress { align: center middle; background: #000000 65%; }
 
 #task-overall Bar, #task-current Bar { width: 1fr; }
 
-
 * {
     scrollbar-color: #68717d;
     scrollbar-color-hover: #87909c;
@@ -142,7 +127,6 @@ TaskProgress { align: center middle; background: #000000 65%; }
     scrollbar-background-active: #202630;
 }
 
-
 CertificateDetails #dialog { width: 88; }
 LegoManager #dialog { width: 80; }
 
@@ -151,21 +135,84 @@ HelpGuide #guide-scroll { height: 1fr; min-height: 0; }
 HelpGuide #form-fields, HelpGuide #form-error { display: none; }
 
 .ssh-path-dialog #dialog { width: 58; }
-.ssh-path-input { width: 100%; height: 6; padding: 0 1; border: solid #507c93; }
+.ssh-path-input { height: 5; }
 
 #page-summary { height: auto; padding: 1 2; color: #a7b8ce; }
-
-#archive-actions { height: 4; margin: 1 0; overflow-y: hidden; }
 
 #form-fields RadioSet { height: auto; width: 100%; margin-top: 1; padding: 0 1; border: none; background: transparent; }
 #form-fields RadioButton { height: 1; margin: 0; }
 
-/* Use ordinary form checkboxes, with complete borders and content height. */
-#form-fields .choice-row { height: 3; margin: 1 0 0 0; }
-#form-fields .choice-row Checkbox { width: 1fr; height: 3; margin: 0; padding: 0 1; }
-#form-fields .choice-row Checkbox:disabled { opacity: 65%; }
-
-.upstream-dialog #form-fields #value { margin-top: 1; }
+/* Exclusive choices use the same checkbox treatment as boolean fields. */
+#form-fields .choice-row { height: 3; margin: 0; }
+#form-fields .choice-row Checkbox { width: 1fr; }
 
 #settings-title { height: 2; text-style: bold; color: #d8f5f0; }
-#settings-tabs { height: 5; margin-bottom: 1; border-bottom: solid #29354a; overflow-y: hidden; }
+
+/* Compact top navigation; the configuration tables retain their full width. */
+#sidebar, Screen.english #sidebar {
+    layout: grid; grid-size: 4; grid-rows: auto; width: 100%; height: 3; padding: 0 1;
+    border: none; background: #16221f; margin-bottom: 1;
+}
+#brand { text-style: bold; content-align: left middle; width: 14; height: 1; padding: 0; background: transparent; color: #90d7d1; }
+#nav { grid-gutter: 1 0; layout: grid; grid-size: 6; grid-columns: 1fr; grid-rows: 1; width: 1fr; height: 1; padding: 0; }
+#nav ListItem { height: 3; width: 1fr; padding: 0 1; align: center top; }
+#nav ListItem Label { width: 100%; height: auto; text-align: center; }
+#nav-spacer { width: 1fr; height: 1; }
+#nav-tools { width: 22; height: 1; align-horizontal: right; }
+#sidebar Button { content-align: center top; width: auto; min-width: 6; height: 3; border: none; margin: 0 0 0 1; padding: 0 1; }
+#sidebar.compact { grid-size: 3; grid-rows: 1 auto; }
+#sidebar.compact #brand { column-span: 1; }
+#main { padding: 0 1; }
+#tables { height: 1fr; }
+#table-panel { width: 1fr; height: 1fr; }
+#deployment-sites-panel { width: 1fr; height: 1fr; margin-left: 2; }
+#tables.stacked { layout: vertical; }
+#tables.stacked #deployment-sites-panel { margin-left: 0; margin-top: 1; }
+#matrix, #deployment-sites { height: 1fr; border: none; }
+#matrix:focus, #deployment-sites:focus { border: none; }
+#actions, #archive-actions { height: 3; margin: 1 0 0 0; border: none; }
+#settings-tabs { height: 3; margin: 0 0 1 0; border: none; }
+#settings-pages { width: 1fr; height: 3; }
+#settings-pages Button { margin: 0; }
+#settings-tools { width: auto; height: 3; align-horizontal: right; }
+#settings-tabs Button { min-width: 6; }
+#settings-tabs.stacked { layout: vertical; height: 6; }
+#settings-tabs.stacked #settings-tools { width: 100%; }
+
+PasswordDialog #dialog, InitializationDialog #dialog { background: #182335; }
+
+/* Compact editor chrome; only the fields scroll on short terminals. */
+Form #dialog { padding: 0 2; max-height: 100%; }
+Form #dialog-title { margin-bottom: 1; }
+Form #form-fields { min-height: 0; }
+Form #form-error { min-height: 0; max-height: 3; overflow-y: auto; }
+
+/* Checkboxes share the neutral form surface; focus colors the entire control. */
+#form-fields Checkbox {
+    height: 3; margin: 0; padding: 0 1;
+    background: transparent; color: #d9e2ee; border: none;
+    content-align: left middle; background-tint: transparent; tint: transparent;
+}
+#form-fields Checkbox > .toggle--button { text-style: bold; }
+#form-fields Checkbox:hover { background: #303030; }
+#form-fields Checkbox:focus { background: $focus-blue; color: #ffffff; }
+#form-fields Checkbox > .toggle--button,
+#form-fields Checkbox.-on > .toggle--button,
+#form-fields Checkbox > .toggle--label {
+    background: transparent; color: #d9e2ee;
+}
+#form-fields Checkbox:focus > .toggle--button,
+#form-fields Checkbox:focus > .toggle--label { background: transparent; color: #ffffff; text-style: bold; }
+#form-fields Checkbox:disabled { background: transparent; color: #777777; opacity: 100%; }
+#form-fields Checkbox:disabled > .toggle--button,
+#form-fields Checkbox:disabled > .toggle--label { background: transparent; color: #777777; }
+
+/* Single and multiline editors share their outer edge and focus treatment. */
+#form-fields Input, #form-fields TextArea {
+    width: 100%; margin: 0; padding: 0 1;
+    border: solid #686868; background: transparent; background-tint: transparent;
+}
+#form-fields Input:focus, #form-fields TextArea:focus { border: solid $focus-blue; }
+#form-fields .port-row Input { width: 12; }
+
+#form-fields TextArea > .text-area--cursor-line { background: transparent; }

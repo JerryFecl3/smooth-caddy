@@ -29,7 +29,7 @@ One instance manages one network. It does not configure DNS resolution, NAT, or 
 
 Download and extract the archive, then start the application. Follow the prompts to set an application password and create a private CA, configure your regions, nodes, and sites, and deploy. See [Configure your first network (Chinese)](docs/usage.md#配置第一个网络) for the walkthrough.
 
-The interface follows your system language, with Simplified Chinese and English available. A terminal of about 140 columns by 40 rows is recommended. Data is stored in `~/.smooth-caddy/` by default, and exports go to `~/smooth-caddy-export/`.
+The interface defaults to your system language, with Simplified Chinese and English available. Choose a language in Settings → Language; changes take effect on next launch. A terminal of about 140 columns by 40 rows is recommended. Data is stored in `~/.smooth-caddy/` by default, and exports go to `~/smooth-caddy-export/`.
 
 Public TLS currently supports Alibaba Cloud DNS and DNSPod. Let's Encrypt uses the **staging environment** by default; switch to production before using certificates for real services.
 

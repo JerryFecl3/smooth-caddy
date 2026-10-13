@@ -1,7 +1,10 @@
 """Independent public certificate UI; no site or publishing integration."""
 from ..i18n import tr
 import asyncio
-from rich.cells import cell_len
+from datetime import datetime, timezone
+from math import ceil
+from rich.text import Text
+from ..network.certificate_policy import certificate_expiry, renewal_status
 from textual import on
 from textual.binding import Binding
 from textual.widgets import Static
@@ -9,6 +12,26 @@ from .widgets import Button, DataTable
 from .dialogs import Form, Field
 from .task_progress import TaskProgress
 from ..network.public_tls import PROVIDERS
+
+def display_domain(item):
+    return item['domain'] + (', *.' + item['domain'] if item['wildcard'] else '')
+
+
+def display_validity(item, now=None):
+    """Show certificate lifetime using the issuance policy's renewal window."""
+    certificate = item['certificate']
+    if not certificate:
+        return Text(tr('无证书'), style='#ff6b6b')
+    now = now or datetime.now(timezone.utc)
+    expires = certificate_expiry(certificate)
+    result = Text(expires.strftime('%Y-%m-%d'))
+    if expires <= now:
+        result.append(' ' + tr('已过期'), style='#ff6b6b')
+    elif renewal_status(certificate, now):
+        days = ceil((expires - now).total_seconds() / 86400)
+        result.append(' ' + tr('仅剩{0}天', days), style='#ffa500')
+    return result
+
 
 class PublicTLSPage:
     """Controller for the main navigation page; dialogs remain independent."""
@@ -25,13 +48,13 @@ class PublicTLSPage:
         table=self.app.query_one('#matrix',DataTable);row,column=table.cursor_coordinate
         table.clear(columns=True)
         domain_width=32
-        for label,width in ((tr('域名'),domain_width),(tr('通配'),8),(tr('状态'),12),(tr('有效期至'),14),(tr('环境'),6)):
-            table.add_column(label,width=max(width, cell_len(label), 18 if label == tr('状态') else 0))
+        for label,width in ((tr('域名'),domain_width),(tr('有效期'),14),(tr('环境'),6)):
+            table.add_column(label, min_width=width, max_width=46)
         self.records=self.service.list()
         self.app.query_one('#nav-sites').set_class(any(k[0]=='sites' for k in self.app.demo.errors()),'config-error')
         self.app.refresh_navigation_labels()
         mode=tr('测试') if self.service.settings()['staging'] else tr('正式')
-        for item in self.records:table.add_row(item['domain'],tr('是') if item['wildcard'] else tr('否'),self.service.state(item),item['expires'][:10] or '—',mode,key=item['id'])
+        for item in self.records:table.add_row(display_domain(item),display_validity(item),mode,key=item['id'])
         table.move_cursor(row=min(row,max(0,len(self.records)-1)),column=column)
         for name in ('pub-details','delete','pub-all'):self.app.query_one('#'+name).disabled=not self.records
         self.app.call_after_refresh(self.app.refresh_button_focus)
@@ -43,18 +66,19 @@ class PublicTLSPage:
     def action_new(self):self.app.require_unlock(lambda:self.edit_record(None))
 
     def edit_record(self,item):
-        fields=[Field('domain',tr('域名'),item['domain'] if item else '',readonly=bool(item)),
-                Field('wildcard',tr('通配证书'),item['wildcard'] if item else False,boolean=True),
-                Field('provider',tr('DNS 服务商'),item['provider'] if item else 'alidns',[(v[0],k) for k,v in PROVIDERS.items()]),
+        fields=[Field('domain',tr('域名'),display_domain(item) if item else '',readonly=bool(item)),
+                Field('wildcard',tr('通配证书（包含根域名和一级通配域名）'),item['wildcard'] if item else False,boolean=True,checkbox_label=tr('申请通配证书')),
+                Field('provider',tr('DNS 服务商'),item['provider'] if item else 'alidns',[(v[0],k) for k,v in PROVIDERS.items()],radio=True),
                 Field('credential_id','AccessKey ID / SecretId','',secret=True),
                 Field('credential_key','AccessKey Secret / SecretKey','',secret=True)]
         # Domain coverage is fixed for an existing certificate identity.
-        if item:fields[1]=Field('wildcard',tr('通配证书'),tr('是') if item['wildcard'] else tr('否'),readonly=True)
+        if item: fields.pop(1)
         def validate(values):
-            try:self.service.save(values['domain'],item['wildcard'] if item else values['wildcard'],values['provider'],values['credential_id'],values['credential_key'],item['id'] if item else None)
+            try:self.service.save(item['domain'] if item else values['domain'],item['wildcard'] if item else values['wildcard'],values['provider'],values['credential_id'],values['credential_key'],item['id'] if item else None)
             except (ValueError,OSError) as error:return str(error)
-        note=tr('凭据留空则保留原值；更换服务商需重新填写。') if item else tr('通配证书同时包含根域名和一级通配域名。')
-        self.app.push_screen(Form(tr('编辑公共 TLS') if item else tr('新增公共 TLS'),fields,validate,note),lambda _:self.refresh_records())
+        if item:
+            for field in fields[-2:]: field.placeholder = tr('留空保留原值；更换服务商需重新填写')
+        self.app.push_screen(Form(tr('编辑公共 TLS') if item else tr('新增公共 TLS'),fields,validate),lambda _:self.refresh_records())
 
     def action_details(self):
         item=self.selected()
@@ -101,8 +125,7 @@ class PublicTLSPage:
             def validate(values):
                 try:self.service.configure(values['staging'],values['email'])
                 except ValueError as error:return str(error)
-            self.app.push_screen(Form(tr('公共 TLS 设置'),[Field('staging',tr('测试模式'),settings['staging'],boolean=True),Field('email',tr('联系邮箱'),settings['email'])],validate,
-                tr('测试证书不受系统信任，不能用于正式服务。')),lambda _:self.refresh_records())
+            self.app.push_screen(Form(tr('公共 TLS 设置'),[Field('staging',tr('测试模式（证书不受信任，不能用于正式服务）'),settings['staging'],boolean=True,checkbox_label=tr('开启测试模式')),Field('email',tr('联系邮箱'),settings['email'])],validate),lambda _:self.refresh_records())
         self.app.require_unlock(opened)
 
     def tool(self):self.app.push_screen(LegoManager())
@@ -111,9 +134,9 @@ class CertificateDetails(Form):
     BINDINGS=[Binding('ctrl+o','edit',tr('编辑')),Binding('ctrl+s','issue',tr('申请'))]
     def __init__(self,item,state):
         self.item=item
-        domains=item['domain']+('、*.'+item['domain'] if item['wildcard'] else '')
-        note=tr('域名范围：{0}\nDNS 服务商：{1}\n状态：{2}\n有效期至：{3}', domains, PROVIDERS[item['provider']][0], state, item['expires'][:10] or '—')
-        if item['error']:note+=tr('\n\n最近申请失败：')+item['error']
+        note=Text(tr('域名范围：{0}\nDNS 服务商：{1}\n有效期：', display_domain(item), PROVIDERS[item['provider']][0]))
+        note.append_text(display_validity(item))
+        if item['error']:note.append(tr('\n\n最近申请失败：')+item['error'])
         super().__init__(item['domain']+' / '+(tr('测试模式') if item['staging'] else tr('正式模式')),[],note=note,return_only=True)
     def compose_actions(self):
         yield Button(tr('返回 · Esc'),id='cancel')

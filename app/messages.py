@@ -1,6 +1,11 @@
 """English translations keyed by source messages; never applied to user data."""
 
-EN = {'个人网络 Caddy 配置与证书管理': 'Caddy configuration and certificate management for personal networks',
+EN = {
+    '有效期': 'Expiry',
+    '域名范围：{0}\nDNS 服务商：{1}\n有效期：': 'Domains: {0}\nDNS provider: {1}\nExpiry: ',
+    '仅剩{0}天': '{0} days left',
+    '无证书': 'No certificate',
+'个人网络 Caddy 配置与证书管理': 'Caddy configuration and certificate management for personal networks',
  '运行数据目录，默认 ~/.smooth-caddy/（数据库 smooth-caddy.db）': 'Data directory; default: ~/.smooth-caddy/ (database: '
                                                     'smooth-caddy.db)',
  '名称': 'Name',
@@ -338,7 +343,7 @@ EN = {'个人网络 Caddy 配置与证书管理': 'Caddy configuration and certi
                                                                                       'individual apps '
                                                                                       'decide whether to '
                                                                                       'trust it.',
- '平台 / 架构': 'Platform / Arch',
+ '平台': 'Platform',
  '中继上游IP': 'Upstream relay IP',
  '绑定地址({0})': 'Bind address ({0})',
  '例如：Personal-Phone': 'Example: Personal-Phone',
@@ -565,7 +570,7 @@ EN = {'个人网络 Caddy 配置与证书管理': 'Caddy configuration and certi
  '任务分组与子任务数量不符': 'Task groups and step counts do not match',
  '无效任务索引': 'Invalid task index',
  '未执行': 'Not run',
- '界面语言；默认跟随系统，仅本次启动生效': 'UI language; default follows the system, for this launch only',
+ '界面语言；覆盖全局配置，仅本次启动生效': 'UI language; overrides global settings for this launch only',
  '直连源头': 'Direct',
  '经上游转发': 'Via upstream',
  '私有 CA': 'Private CA',
@@ -655,3 +660,21 @@ EN.update({
 })
 
 EN.update({'启用中继服务':'Enable relay service','中继端口':'Relay port'})
+
+EN.update({
+    "语言": "Language",
+    "界面语言": "Interface language",
+    "自动（跟随系统）": "Auto (system)",
+    "已保存，下次启动生效。": "Saved. Takes effect on next launch.",
+    "语言设置下次启动生效；--language 可临时覆盖。": "Language changes take effect on next launch; --language overrides them temporarily.",
+})
+
+EN.update({'SSH（每行一个 IP，最后一行为目标）': 'SSH (one IP per line, target last)', '按连接顺序填写；用户 root，端口 22': 'In connection order; user root, port 22', '绑定地址（每行一个 IP，共用端口）': 'Bind addresses (one IP per line, shared ports)', '0.0.0.0：全部 IPv4；::：全部 IPv6': '0.0.0.0: all IPv4; ::: all IPv6', '覆盖 HTTP 端口（仅跳转至 HTTPS）': 'Override HTTP port (redirect to HTTPS only)', '覆盖 HTTPS 端口': 'Override HTTPS port', '首页跳转路径（仅作用于 /）': 'Homepage redirect (only /)', '可带查询参数，参数将显示在浏览器地址中': 'Query parameters are visible in the browser address', '允许访问路径（每行一条，留空不限制）': 'Allowed paths (one per line; blank for all)', '不匹配的路径返回 404': 'Unmatched paths return 404', 'TLS 来源（公共证书来自 TLS证书页面）': 'TLS source (public certificates from TLS page)', '中继 HTTPS 地址（指向现有服务，避免转发环路）': 'Relay HTTPS URL (existing service; avoid loops)', '通配证书（包含根域名和一级通配域名）': 'Wildcard certificate (root and first-level subdomains)', '留空保留原值；更换服务商需重新填写': 'Blank keeps existing value; re-enter if provider changes', '测试模式（证书不受信任，不能用于正式服务）': 'Test mode (untrusted; not for production)'})
+
+EN.update({'界面语言（下次启动生效）': 'Interface language (effective on next launch)'})
+
+EN.update({'校验源地址的 HTTPS 证书': 'Verify the source HTTPS certificate', '开启校验': 'Enable verification', 'mTLS 客户端证书验证': 'mTLS client certificate verification', '区域监听': 'Region listeners', '申请通配证书': 'Request a wildcard certificate', '开启测试模式': 'Enable test mode'})
+
+EN.update({'导出部署包': 'Export deployment package'})
+
+EN.update({'自动': 'Auto'})

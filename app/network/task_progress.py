@@ -68,7 +68,5 @@ class TaskState:
         return [(name,[i for i,g in enumerate(groups) if g == name]) for name in dict.fromkeys(groups)]
 
     def counts(self):
-        sections = self.sections()
-        if len(sections) > 1:
-            return sum(all(self.states.get(i) in TERMINAL for i in ids) for _,ids in sections), len(sections)
-        return sum(s in TERMINAL for s in self.states.values()), len(self.steps)
+        # Groups organize the display; every leaf task contributes one unit.
+        return sum(self.states.get(i) in TERMINAL for i in range(len(self.steps))), len(self.steps)

@@ -25,27 +25,24 @@ def edit_configuration(self):
         fields = [Field('platform', tr('目标平台'), obj.platform, labeled_options(PLATFORMS),radio=True),
                   Field('arch', tr('CPU 架构'), obj.arch, [(x, x) for x in ARCHES],radio=True)]
     elif key == 'ssh_hops':
-        fields = [Field('value', tr('SSH 地址'), '\n'.join(hop[0] for hop in obj.ssh_hops), multiline=True)]
-        note = tr('每行一个 IP，按连接顺序填写，最后一行是目标节点。') + '\n' + tr('root · 端口 22')
+        fields = [Field('value', tr('SSH（每行一个 IP，最后一行为目标）'), '\n'.join(hop[0] for hop in obj.ssh_hops), multiline=True, placeholder=tr('按连接顺序填写；用户 root，端口 22'))]
         def validator(v):
             try: parse_ssh_path(v['value'])
             except ValueError as error: return str(error)
     elif key == 'upstream_url':
         fields=[]
-        note=tr('选择中继时，地址必须指向已存在的中继服务及其 HTTPS 端口。请避免转发环路。')
     elif key.startswith('area:'):
         r = self.demo.find('regions', key[5:])
         if page == 'sites':
             fields=[]  # ServiceForm renders the grouped policy controls.
         else:
             a = deepcopy(obj.areas.get(r.id, Listen()))
-            fields = [Field('enabled', tr('启用此区域'), a.enabled, boolean=True), Field('ips', tr('绑定地址'), '\n'.join(a.ips), multiline=True)]
+            fields = [Field('enabled', tr('区域监听'), a.enabled, boolean=True, checkbox_label=tr('启用此区域')), Field('ips', tr('绑定地址（每行一个 IP，共用端口）'), '\n'.join(a.ips), multiline=True, placeholder=tr('0.0.0.0：全部 IPv4；::：全部 IPv6'))]
             for i,(title,default,value) in enumerate(zip(('HTTP',PORTS[0]),('80','443'),a.ports[:2])):
-                fields.extend([Field(f'override{i}',tr('覆盖 {0} 端口（默认 {1}）',title,default),value!=default,boolean=True),
+                fields.extend([Field(f'override{i}',tr('覆盖 HTTP 端口（仅跳转至 HTTPS）') if i == 0 else tr('覆盖 HTTPS 端口'),value!=default,boolean=True),
                                Field(f'port{i}',title+tr(' 端口'),value)])
             fields.extend([Field('relay_enabled',tr('启用中继服务'),a.relay_enabled,boolean=True),
                            Field('port2',tr('中继端口'),a.ports[2])])
-            note = tr('每行一个 IP，共用下面的一组端口。0.0.0.0 监听全部 IPv4，:: 监听全部 IPv6。') + '\n' + tr('HTTP 端口仅用于 HTTPS 跳转。')
             def candidate(v):
                 addresses = binding_addresses(v['ips'].splitlines()) if v['enabled'] else [ip.strip() for ip in v['ips'].splitlines() if ip.strip()]
                 return Listen(v['enabled'], addresses,
@@ -62,19 +59,17 @@ def edit_configuration(self):
                 return '\n'.join(problems) or None
     elif page == 'sites' and key == 'source':
         fields=[Field('value',tr('源地址'),obj.source),
-                Field('verify',tr('校验 HTTPS 源证书'),obj.verify_origin_https,boolean=True),
-                Field('redirect',tr('首页跳转路径'),obj.homepage_redirect),
-                Field('paths',tr('允许访问路径'), '\n'.join(obj.allowed_paths),multiline=True)]
-        note=tr('首页跳转仅作用于 /；允许路径每行一条，留空不限制。不匹配返回 404。')+'\n'+tr('首页跳转可带查询参数，参数会显示在浏览器地址中。')
+                Field('verify',tr('校验源地址的 HTTPS 证书'),obj.verify_origin_https,boolean=True,checkbox_label=tr('开启校验')),
+                Field('redirect',tr('首页跳转路径（仅作用于 /）'),obj.homepage_redirect, placeholder=tr('可带查询参数，参数将显示在浏览器地址中')),
+                Field('paths',tr('允许访问路径（每行一条，留空不限制）'), '\n'.join(obj.allowed_paths),multiline=True, placeholder=tr('不匹配的路径返回 404'))]
         def validator(v):
             from ..network.models import validate_site_paths
             try: validate_site_paths(v['redirect'],[p.strip() for p in v['paths'].splitlines() if p.strip()])
             except ValueError as error: return str(error)
     elif key == 'tls_source':
-        fields = [Field('value', tr('TLS 来源'), obj.tls_source, labeled_options(('private_ca','public_ca')),radio=True)]
-        note = tr('公共证书来自 TLS证书页面。')
+        fields = [Field('value', tr('TLS 来源（公共证书来自 TLS证书页面）'), obj.tls_source, labeled_options(('private_ca','public_ca')),radio=True)]
     elif key == 'mtls':
-        fields=[Field('value',tr('mTLS 验证'),obj.mtls,boolean=True)]
+        fields=[Field('value',tr('mTLS 客户端证书验证'),obj.mtls,boolean=True,checkbox_label=tr('开启校验'))]
     elif key == 'enabled':
         fields = [Field('value', tr('Client 状态'), obj.enabled, [(tr('启用'), True), (tr('禁用'), False)])]
     elif key == 'expiry':

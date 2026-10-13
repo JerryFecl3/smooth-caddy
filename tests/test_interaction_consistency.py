@@ -14,7 +14,7 @@ class InteractionConsistencyTests(unittest.IsolatedAsyncioTestCase):
             async with ui.run_test(size=(140,40)) as pilot:
                 await pilot.press('f2','enter');await pilot.pause()
                 screen=ui.screen
-                for key in ('ctrl+o','ctrl+n','ctrl+d','ctrl+e','f1','f7'):
+                for key in ('ctrl+o','ctrl+n','ctrl+d','ctrl+e','f1','ctrl+up'):
                     await pilot.press(key);await pilot.pause()
                     self.assertIs(ui.screen,screen)
                     self.assertEqual(ui.page,'sites')

@@ -1,7 +1,7 @@
 """Persistent terminal interface using the application command boundary."""
 from ..i18n import tr
 from ..i18n import get_language
-from .widgets import Button, ListView, DataTable
+from .widgets import Button, ListView, DataTable, ReadOnlyDataTable
 from functools import wraps
 import re
 import sqlite3
@@ -41,13 +41,15 @@ class Terminal(App, inherit_bindings=False):
     CSS_PATH = 'tui.tcss'
     ENABLE_COMMAND_PALETTE = False
     BINDINGS = [
-        Binding("f7", "move_item(-1)", show=False),
-        Binding("f8", "move_item(1)", show=False),
+        Binding("ctrl+up", "move_item(-1)", show=False),
+        Binding("ctrl+down", "move_item(1)", show=False),
+        Binding('f9', 'language_settings', tr('语言'), priority=True),
         Binding('f10', 'toggle_shortcuts', tr('帮助'), priority=True),
         *[Binding(f'f{i}', f'nav_page({i})', title, priority=True) for i, title in enumerate(NAV_PAGES.values(), 1)],
         Binding('tab', 'next_region', tr('下一区域'), priority=True),
         Binding('shift+tab', 'previous_region', tr('上一区域'), priority=True),
         Binding('ctrl+o', 'edit', tr('编辑')), Binding('ctrl+t', 'toggle_client', tr('启用 / 禁用')), Binding('ctrl+n', 'new', tr('新增')), Binding('delete', 'delete', tr('删除')),
+        Binding('ctrl+g', 'manage_ca', tr('CA 管理')), Binding('ctrl+s', 'apply_all', tr('全部申请')),
         Binding('ctrl+e', 'export', tr('导出')), Binding('ctrl+d', 'deploy', 'deploy'),
         Binding('ctrl+q', 'quit', tr('退出'), priority=True), Binding('escape', 'navigation', tr('导航')),
     ]
@@ -71,30 +73,37 @@ class Terminal(App, inherit_bindings=False):
         self.positions = {}
 
     def compose(self):
-        yield Static('Smooth Caddy', id='brand')
-        with Horizontal(id='workspace'):
-            with Vertical(id='sidebar'):
-                yield ListView(*[ListItem(Label(title), id='nav-' + key) for key, title in NAV_PAGES.items()], id='nav')
-                yield Static('', id='nav-note')
+        with Horizontal(id='sidebar'):
+            yield Static('smooth caddy', id='brand')
+            yield ListView(*[ListItem(Label(title), id='nav-' + key) for key, title in NAV_PAGES.items()], id='nav')
+            yield Static('', id='nav-spacer')
+            with Horizontal(id='nav-tools'):
+                yield Button('中/EN · F9', id='settings-language')
                 yield Button(tr('帮助 · F10'), id='help')
                 yield Button(tr('退出 · ^q'), id='quit')
+        with Horizontal(id='workspace'):
             with Vertical(id='main'):
                 yield Static(tr('设置'), id='settings-title')
-                with HorizontalScroll(id='settings-tabs'):
-                    yield Button(tr('区域'), id='settings-regions')
-                    yield Button(tr('存档'), id='settings-archives')
-                    yield Static('', classes='action-spacer')
-                    yield Button(tr('导入配置'), id='settings-import')
-                    yield Button(tr('修改口令'), id='password')
+                with Horizontal(id='settings-tabs'):
+                    with Horizontal(id='settings-pages'):
+                        yield Button(tr('区域'), id='settings-regions')
+                        yield Button(tr('存档'), id='settings-archives')
+                    with Horizontal(id='settings-tools'):
+                        yield Button(tr('导入配置'), id='settings-import')
+                        yield Button(tr('修改口令'), id='password')
                 yield Static('', id='page-summary', markup=False)
-                yield DataTable(id='matrix', fixed_columns=1, zebra_stripes=True, cursor_type='cell', cursor_foreground_priority='css')
+                with Horizontal(id='tables'):
+                    with Vertical(id='table-panel'):
+                        yield DataTable(id='matrix', fixed_columns=1, zebra_stripes=True, cursor_type='cell', cursor_foreground_priority='css')
+                    with Vertical(id='deployment-sites-panel'):
+                        yield ReadOnlyDataTable(id='deployment-sites', fixed_columns=1, zebra_stripes=True, show_cursor=False, cursor_type='none', cursor_foreground_priority='css')
                 with VerticalScroll(id='ca-panel'):
                     yield Static('', id='ca-info', markup=False)
                 with HorizontalScroll(id='actions'):
                     yield Button(tr('禁用 · ^t'), id='client-toggle')
                     yield Button(tr('编辑 · ^o'), id='edit')
-                    yield Button(tr('导出 .run')+' · ^e', id='run-export')
-                    yield Button(tr('部署')+' · ^d', id='generate-deploy')
+                    yield Button(tr('导出部署包'), id='run-export')
+                    yield Button(tr('部署'), id='generate-deploy')
                     yield Button(tr('详情 · ^o'), id='pub-details')
                     yield Button(tr('新增 · ^n'), id='new')
                     yield Button(tr('删除 · Del'), id='delete')
@@ -102,13 +111,13 @@ class Terminal(App, inherit_bindings=False):
                     yield Static('', classes='action-spacer')
                     yield Button(tr('返回证书 · Esc'), id='ca-back')
                     yield Button(tr('导出信任 CA · ^e'), id='public-ca')
-                    yield Button(tr('全部申请'), id='pub-all')
+                    yield Button(tr('全部申请')+' · ^s', id='pub-all')
                     yield Button(tr('公共TLS设置'), id='pub-settings')
                     yield Button(tr('lego 管理'), id='pub-tool')
-                    yield Button(tr('CA 管理'), id='ca-open')
-                    yield Button(tr('全部导出'), id='run-export-all')
-                    yield Button(tr('全部部署'), id='deploy-all')
-                    yield Button(tr('SSH 公钥'), id='ssh-guide')
+                    yield Button(tr('CA 管理')+' · ^g', id='ca-open')
+                    yield Button(tr('全部导出')+' · ^e', id='run-export-all')
+                    yield Button(tr('全部部署')+' · ^d', id='deploy-all')
+                    yield Button(tr('SSH 公钥')+' · ^e', id='ssh-guide')
                     yield Button(tr('初始化 CA'), id='initialize')
                     yield Button(tr('重置 SSH 私钥'), id='ssh-reset', variant='error')
 
@@ -124,6 +133,7 @@ class Terminal(App, inherit_bindings=False):
         self.render_page()
         self.query_one('#matrix').focus()
         self.call_after_refresh(self.initialize_startup)
+        self.call_after_refresh(self.refresh_layout)
 
     def initialize_startup(self):
         security = self.application.security
@@ -212,6 +222,7 @@ class Terminal(App, inherit_bindings=False):
 
     def refresh_shortcuts(self):
         self.refresh_navigation_labels()
+        self.call_after_refresh(self.refresh_layout)
         for screen in self.screen_stack:
             for button in screen.query(Button):
                 button.refresh(layout=True)
@@ -222,7 +233,7 @@ class Terminal(App, inherit_bindings=False):
             item = self.screen_stack[0].query_one('#nav-' + key, ListItem)
             count = sum(1 for k in errors if k[0] == ('regions' if key == 'settings' else key))
             item.set_class(bool(count), 'config-error')
-            item.query_one(Label).update(NAV_PAGES[key] + (f' · F{i}' if self.show_shortcuts and i<=6 else '') + ('  !' if count else ''))
+            item.query_one(Label).update(NAV_PAGES[key] + (' !' if count else '') + (f' F{i}' if self.show_shortcuts and i<=6 else ''))
 
     def on_descendant_focus(self, event):
         self.call_after_refresh(self.refresh_button_focus)
@@ -273,7 +284,8 @@ class Terminal(App, inherit_bindings=False):
         ids = {w.id for w in ([focused] + list(focused.ancestors))} if focused else set()
         groups = ['sidebar']
         if self.page in ('regions','archives'): groups.append('settings-tabs')
-        groups.extend(['content','archive-actions' if self.page=='archives' else 'actions'])
+        groups.append('content')
+        groups.append('archive-actions' if self.page=='archives' else 'actions')
         current = next((group for group in groups if group in ids),'content')
         target = groups[(groups.index(current)+direction)%len(groups)]
         if target == 'sidebar':
@@ -303,7 +315,7 @@ class Terminal(App, inherit_bindings=False):
         self.rendered_page = self.page
         self.call_after_refresh(self.refresh_button_focus)
         in_settings = self.page in ('regions','archives')
-        self.query_one('#settings-title').display = in_settings
+        self.query_one('#settings-title').display = False
         self.query_one('#settings-tabs').display = in_settings
         for tab in ('regions','archives'):
             self.query_one('#settings-'+tab,Button).set_class(self.page == tab, 'nav-active')
@@ -317,6 +329,8 @@ class Terminal(App, inherit_bindings=False):
         self.refresh_navigation_labels()
         table = self.query_one('#matrix', DataTable)
         table.display = self.page != 'ca'
+        self.query_one('#tables').display = self.page != 'ca'
+        self.query_one('#deployment-sites-panel').display = self.page == 'deployment'
         table.cursor_type = 'row' if self.page in ('deployment', 'clients', 'public_tls', 'archives') else 'cell'
         self.query_one('#ca-panel').display = self.page == 'ca'
         self.query_one('#archive-actions').display = self.page == 'archives'
@@ -352,10 +366,10 @@ class Terminal(App, inherit_bindings=False):
             rows=[self.deployment_cells(node,errors) for node in self.demo.nodes]
             headers=[(tr('节点'),'node'),*[(region.name,region.id) for region in self.demo.regions]]
             for index,(heading,identity) in enumerate(headers):
-                width=max(22 if index==0 else 34,cell_len(heading),max((cell_len(line) for row in rows for line in row[index].plain.splitlines()),default=0)+2)
-                table.add_column(heading,key=identity,width=width)
+                table.add_column(heading, key=identity, min_width=14 if index == 0 else 16, max_width=46)
             for node,cells in zip(self.demo.nodes,rows):
-                table.add_row(*cells,key=node.id,height=max(2,*(cell.plain.count('\n')+1 for cell in cells)))
+                table.add_row(*cells,key=node.id,height=2)
+            self.render_deployment_sites(errors)
             pos=self.positions.get('deployment',(0,0))
             table.move_cursor(row=min(pos[0],max(0,len(self.demo.nodes)-1)))
             blocked=bool(errors) or not self.demo.nodes or not self.demo.initialized
@@ -364,21 +378,21 @@ class Terminal(App, inherit_bindings=False):
         elif self.page == 'ca':
             self.render_ca()
         else:
-            columns = [('name', tr('名称'), 18 if self.page == 'clients' else 11)]
+            columns = [('name', tr('名称'), 12, 32)]
             if self.page == 'nodes':
-                columns += [('platform', tr('平台 / 架构'), 20), ('ssh_hops', tr('SSH 地址'), max(18, min(46, max((cell_len(line) for n in self.demo.nodes for line in self.cell_value(n, 'ssh_hops').splitlines()), default=0) + 1)))]
+                columns += [('platform', tr('平台'), 10, 24), ('ssh_hops', 'SSH', 18, 46)]
             elif self.page == 'sites':
-                columns=[('name',tr('名称'),max(12,max((cell_len(s.name) for s in self.demo.sites),default=0)+2))]
-                columns += [(key,title,max(minimum,min(maximum,max((cell_len(getattr(s,key)) for s in self.demo.sites),default=0)+2))) for key,title,minimum,maximum in [('domain',tr('服务域名'),20,32),('source',tr('源地址'),24,36)]]
+                columns += [('domain', tr('服务域名'), 20, 32), ('source', tr('源地址'), 24, 36)]
             elif self.page == 'regions':
-                columns += [('tls_source',tr('默认 TLS 来源'),20),('mtls',tr('默认 mTLS 验证'),20)]
+                columns += [('tls_source', tr('默认 TLS 来源'), 12, 32), ('mtls', tr('默认 mTLS 验证'), 12, 24)]
             else:
-                columns += [('enabled', tr('状态'), 6), ('expiry', tr('有效期至'), 10)]
+                columns += [('expiry', tr('有效期'), 10, 24), ('enabled', tr('状态'), 6, 16)]
             if self.page in ('nodes', 'sites'):
-                columns += [('area:' + r.id, tr('绑定地址({0})', r.name) if self.page == 'nodes' else r.name, 32 if self.page == 'nodes' else max(20,max((cell_len(self.service_label(s,r)) for s in self.demo.sites),default=0)+2)) for r in self.demo.regions]
-            if self.page == 'nodes': columns += [('upstream_url',tr('上游'),max(28,max((cell_len(n.upstream_url) for n in self.demo.nodes),default=0)))]
-            for key, label, width in columns:
-                table.add_column(label, key=key, width=max(width, cell_len(label)))
+                columns += [('area:' + r.id, r.name, 16, 46) for r in self.demo.regions]
+            if self.page == 'nodes':
+                columns += [('upstream_url', tr('上游'), 20, 46)]
+            for key, label, minimum, maximum in columns:
+                table.add_column(label, key=key, min_width=minimum, max_width=maximum)
                 self.col_keys.append(key)
             items = self.demo.items(self.page)
             for obj in items:
@@ -386,13 +400,15 @@ class Terminal(App, inherit_bindings=False):
                 for key in self.col_keys:
                     value = self.cell_value(obj, key)
                     bad = (self.page, obj.id, key) in errors or (key == 'platform' and (self.page, obj.id, 'arch') in errors) or (self.page=='sites' and key.startswith('area:') and ('sites',obj.id,'tls_source') in errors)
-                    cells.append(Text(('! ' if bad else '') + value, style='#ffb4a2' if bad else ''))
-                height = max(2,max((cell.plain.count('\n') + 1 for cell in cells),default=1)) if self.page == 'nodes' else 1
+                    style = '#ffb4a2' if bad else '#ffa500' if self.page == 'clients' and key == 'enabled' and not obj.enabled else ''
+                    cells.append(Text(('! ' if bad else '') + value, style=style))
+                height = 2 if self.page == 'nodes' else 1
                 table.add_row(*cells, key=obj.id, height=height)
                 self.row_ids.append(obj.id)
             pos = self.positions.get(self.page, (0, 0))
             table.move_cursor(row=min(pos[0], max(0, len(self.row_ids)-1)), column=min(pos[1], len(self.col_keys)-1))
             self.update_selection()
+        self.call_after_refresh(self.refresh_layout)
 
     def deployment_cells(self, node, errors):
         def marked(value, bad):
@@ -407,14 +423,86 @@ class Terminal(App, inherit_bindings=False):
                 cells.append(Text(tr('未启用')));continue
             bad=('nodes',node.id,'area:'+region.id) in errors or any(page=='regions' and identity==region.id for page,identity,_ in errors)
             cell=marked(self.cell_value(node,'area:'+region.id),bad)
-            sites=[site for site in self.demo.sites if service_policy(site,region).enabled]
-            name_width=max((cell_len(site.name) for site in sites),default=0)
-            for site in sites:
-                bad=any(page=='sites' and identity==site.id and (not field.startswith('area:') or field=='area:'+region.id) for page,identity,field in errors)
-                name=site.name+' '*(name_width-cell_len(site.name))
-                cell.append('\n  ');cell.append(Text(name+'  '+self.service_label(site,region)+(' !' if bad else ''),style='#ffb4a2' if bad else ''))
             cells.append(cell)
         return cells
+
+    def render_deployment_sites(self, errors):
+        table = self.query_one('#deployment-sites', DataTable)
+        position = table.cursor_coordinate
+        table.clear(columns=True)
+        rows = []
+        for site in self.demo.sites:
+            bad = any(page == 'sites' and identity == site.id and not field.startswith('area:') for page, identity, field in errors)
+            cells = [Text(('! ' if bad else '') + site.name, style='#ffb4a2' if bad else '')]
+            for region in self.demo.regions:
+                bad = ('sites', site.id, 'area:' + region.id) in errors or any(page == 'regions' and identity == region.id for page, identity, _ in errors)
+                cells.append(Text(('! ' if bad else '') + self.service_label(site, region), style='#ffb4a2' if bad else ''))
+            rows.append(cells)
+        for index, (heading, identity) in enumerate([(tr('站点'), 'site'), *[(r.name, r.id) for r in self.demo.regions]]):
+            table.add_column(heading, key=identity, min_width=12, max_width=40)
+        for site, cells in zip(self.demo.sites, rows): table.add_row(*cells, key=site.id)
+        table.move_cursor(row=min(position.row, max(0, len(rows)-1)), column=min(position.column, len(table.columns)-1))
+
+    def on_resize(self):
+        self.call_after_refresh(self.refresh_layout)
+
+    def refresh_layout(self):
+        if not self.is_mounted: return
+        # Wrap groups without hiding navigation or changing table data on resize.
+        width = self.size.width
+        nav = self.screen_stack[0].query_one('#nav')
+        # Reserve an error marker and include visible inline shortcut hints.
+        widths = [cell_len(title) + 4 + (3 if self.show_shortcuts else 0) for title in NAV_PAGES.values()]
+        row_height = 3
+        tools = self.screen_stack[0].query_one('#nav-tools')
+        tools_width = sum(button.occupied_width() for button in tools.query(Button))
+        tools.styles.width = tools_width
+        tools.styles.height = row_height
+        for button in tools.query(Button):
+            button.styles.height = row_height
+            button.styles.padding = (row_height - 2, 1, 0, 1)
+        compact = width < sum(widths) + tools_width + 16
+        header = self.screen_stack[0].query_one('#sidebar')
+        header.set_class(compact, 'compact')
+        available = max(1, width - 2 if compact else width - tools_width - 16)
+        order = ['brand', 'nav-spacer', 'nav-tools', 'nav'] if compact else ['brand', 'nav', 'nav-spacer', 'nav-tools']
+        header.sort_children(key=lambda widget: order.index(widget.id))
+        nav.styles.column_span = 3 if compact else 1
+        for columns in range(len(widths), 0, -1):
+            column_widths = [max(widths[i::columns]) for i in range(columns)]
+            if sum(column_widths) <= available:
+                break
+        nav_width = sum(column_widths)
+        nav.styles.grid_size_columns = columns
+        nav.styles.grid_columns = ' '.join(map(str, column_widths))
+        nav.styles.grid_rows = str(row_height)
+        nav.styles.width = nav_width
+        rows = (len(widths) + columns - 1) // columns
+        nav_height = rows * row_height + rows - 1
+        nav.styles.height = nav_height
+        for item in nav.query(ListItem):
+            item.styles.height = row_height
+            item.styles.padding = (row_height - 2, 1, 0, 1)
+        header.styles.grid_columns = f'14 1fr {tools_width}' if compact else f'14 {nav_width} 1fr {tools_width}'
+        brand_height = row_height
+        header.styles.grid_rows = f'{brand_height} auto' if compact else 'auto'
+        header.styles.height = nav_height + (brand_height if compact else 0)
+        brand = self.screen_stack[0].query_one('#brand')
+        brand.styles.height = brand_height if compact else row_height
+        brand.update('smooth caddy')
+        settings = self.screen_stack[0].query_one('#settings-tabs')
+        needed = sum(button.occupied_width() for button in settings.query(Button))
+        settings.set_class(width - 4 < needed, 'stacked')
+        tables = self.screen_stack[0].query_one('#tables')
+        node_panel = self.screen_stack[0].query_one('#table-panel')
+        matrix = self.screen_stack[0].query_one('#matrix', DataTable)
+        sites = self.screen_stack[0].query_one('#deployment-sites', DataTable)
+        needed = sum(c.width + 2 for c in matrix.columns.values()) + sum(c.width + 2 for c in sites.columns.values()) + 8
+        stacked = self.page == 'deployment' and width < max(110, needed)
+        tables.set_class(stacked, 'stacked')
+        if stacked:
+            node_panel.styles.height = min(max(4, sum(row.height for row in matrix.rows.values()) + 2), max(4, tables.size.height // 2))
+        else: node_panel.styles.height = '1fr'
 
     def service_label(self, site, region, inheritance=False):
         policy=service_policy(site,region)
@@ -620,9 +708,9 @@ class Terminal(App, inherit_bindings=False):
 
     def render_ca(self):
         authorities,clients = self.application.certificates.overview()
-        table = Table(expand=True, box=None, padding=(0, 1), collapse_padding=True)
-        table.add_column(tr('证书名称'), ratio=1, overflow='fold')
-        table.add_column(tr('有效期至'), width=10, justify='right', no_wrap=True)
+        table = Table(expand=False, box=None, padding=(0, 1), collapse_padding=True)
+        table.add_column(tr('证书名称'), min_width=12, max_width=46, overflow='fold')
+        table.add_column(tr('有效期'), min_width=10, max_width=24, justify='right', overflow='fold')
         if self.demo.initialized:
             table.add_row(Text(authorities['root'][0]), authorities['root'][1])
             for role,prefix in [('relay','├─ '),('tls','├─ '),('client','└─ ')]:
@@ -699,7 +787,8 @@ class Terminal(App, inherit_bindings=False):
             if client: self.export_certificate(client)
         elif self.page == 'ca':
             if self.demo.initialized: self.export_certificate()
-        elif self.page == 'deployment': self.open_export('package')
+        elif self.page == 'deployment': self.open_export('package', all_nodes=True)
+        elif self.page == 'nodes': self.query_one('#ssh-guide', Button).press()
         elif self.page == 'archives': self.archives_page.export(selected=True)
 
     def open_export(self, mode, all_nodes=False):
@@ -718,9 +807,37 @@ class Terminal(App, inherit_bindings=False):
 
     def action_deploy(self):
         if len(self.screen_stack)!=1:return
-        if self.page!='deployment':
-            self.page='deployment';self.render_page();self.query_one('#matrix').focus();return
-        self.open_export('deploy')
+        if self.page == 'deployment': self.open_export('deploy', all_nodes=True)
+
+    def action_manage_ca(self):
+        if len(self.screen_stack) == 1 and self.page == 'clients':
+            self.query_one('#ca-open', Button).press()
+
+    def action_apply_all(self):
+        if len(self.screen_stack) == 1 and self.page == 'public_tls':
+            self.query_one('#pub-all', Button).press()
+
+    def action_language_settings(self):
+        if len(self.screen_stack) == 1:
+            self.language_settings()
+
+    def language_settings(self):
+        if len(self.screen_stack) != 1: return
+        from ..preferences import load_language, save_language
+        directory = self.application.store.directory
+        def saved(values):
+            if values is None:
+                return
+            try:
+                save_language(directory, values["language"])
+            except OSError as error:
+                self.show_info(tr("语言"), str(error))
+                return
+            self.show_info(tr("语言"), tr("已保存，下次启动生效。"))
+        self.push_screen(Form(tr("语言"), [
+            Field("language", tr("界面语言（下次启动生效）"), load_language(directory),
+                  [(tr("自动"), "auto"), ("English", "en"), ("中文", "zh-CN")], radio=True)
+        ]), saved)
 
     def action_help(self):
         self.action_toggle_shortcuts()
@@ -736,6 +853,7 @@ class Terminal(App, inherit_bindings=False):
         elif key=='run-export-all': self.open_export('package',all_nodes=True)
         elif key=='deploy-all': self.open_export('deploy',all_nodes=True)
         elif key=='archive-save': self.archives_page.save()
+        elif key=='settings-language': self.language_settings()
         elif key=='settings-import': self.archives_page.import_json()
         elif key=='archive-restore': self.archives_page.restore()
         elif key=='archive-export': self.archives_page.export(selected=True)

@@ -7,8 +7,8 @@ from textual import on
 from textual.binding import Binding
 from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Label, Static, TextArea, RadioSet, RadioButton
-from .widgets import Button, Checkbox, Input, Select
+from textual.widgets import Label, Static, RadioSet, RadioButton
+from .widgets import Button, Checkbox, Input, Select, TextArea
 from .choice_row import ChoiceRow
 
 @dataclass
@@ -23,6 +23,12 @@ class Field:
     placeholder: str = ''
     multiline: bool = False
     radio: bool = False
+    checkbox_label: str | None = None
+
+class FormFields(VerticalScroll):
+    def on_resize(self):
+        self.call_after_refresh(self.screen.reveal_field)
+
 
 class Form(ModalScreen):
     BINDINGS = [Binding('escape', 'cancel', tr('取消')), Binding('ctrl+s', 'save', tr('确认')), Binding('ctrl+y', 'confirm_danger', tr('确认危险操作')), Binding('enter', 'danger_enter', '', priority=True, show=False)]
@@ -36,7 +42,7 @@ class Form(ModalScreen):
         with Vertical(id='dialog'):
             yield Static(self.caption, id='dialog-title', markup=False)
             yield Static(self.note, id='dialog-note', markup=False)
-            with VerticalScroll(id='form-fields'):
+            with FormFields(id='form-fields'):
                 yield from self.compose_fields()
             yield Static('', id='form-error', markup=False)
             with Horizontal(classes='dialog-actions'):
@@ -57,12 +63,14 @@ class Form(ModalScreen):
                     yield Checkbox(f.label,bool(f.value),id=f.key)
                     yield Input(str(port.value),id=port.key)
             elif f.boolean:
+                if f.checkbox_label is not None:
+                    yield Label(f.label)
                 with Horizontal(classes='choice-row'):
-                    yield Checkbox(f.label,bool(f.value),id=f.key)
+                    yield Checkbox(f.checkbox_label if f.checkbox_label is not None else f.label,bool(f.value),id=f.key)
             else:
                 yield Label(f.label)
                 if f.multiline:
-                    yield TextArea(str(f.value), id=f.key, soft_wrap=False, tab_behavior='focus', classes='ssh-path-input')
+                    yield TextArea(str(f.value), id=f.key, soft_wrap=False, tab_behavior='focus', placeholder=f.placeholder, classes='ssh-path-input')
                 elif f.readonly:
                     yield Static(str(f.value), id=f.key, markup=False)
                 elif f.choices is not None and f.radio:
@@ -79,11 +87,36 @@ class Form(ModalScreen):
 
     def on_mount(self):
         self.query_one('#dialog-note').display = bool(self.note)
+        for error in self.query('#form-error'):
+            error.display = False
+        self.call_after_refresh(self.fit_fields)
         controls = list(self.query('Input, Select, Checkbox, TextArea, RadioSet'))
         self.set_focus(controls[0] if controls else self.query_one('#cancel' if self.return_only else '#save'))
         if len(self.fields) == 1 and controls and isinstance(controls[0], Input):
             controls[0].action_select_all()
         self.sync_enabled()
+
+    def on_resize(self):
+        self.call_after_refresh(self.fit_fields)
+
+    def fit_fields(self):
+        if not self.is_mounted or isinstance(self, HelpGuide):
+            return
+        dialog = self.query_one('#dialog')
+        fields = self.query_one('#form-fields')
+        if fields.parent is not dialog:
+            return
+        reserved = dialog.styles.gutter.height
+        for child in dialog.children:
+            if child is not fields and child.display:
+                reserved += child.outer_size.height + child.styles.margin.height
+        fields.styles.max_height = max(1, self.size.height - reserved)
+        self.call_after_refresh(self.reveal_field)
+
+    def reveal_field(self):
+        fields = self.query_one('#form-fields')
+        if self.focused is not None and fields in self.focused.ancestors:
+            fields.scroll_to_widget(self.focused, animate=False, immediate=True)
 
     def sync_enabled(self):
         if not any(f.key == 'enabled' for f in self.fields):
@@ -148,6 +181,8 @@ class Form(ModalScreen):
         problem = self.validate(values) if self.validate else None
         if problem:
             self.query_one('#form-error', Static).update(problem)
+            self.query_one('#form-error').display = True
+            self.call_after_refresh(self.fit_fields)
             return
         if self.confirm:
             def verified(answer):
@@ -169,7 +204,7 @@ class SSHGuide(Form):
         with Vertical(id='dialog'):
             yield Static(self.caption, id='dialog-title', markup=False)
             yield Static('', id='dialog-note')
-            with VerticalScroll(id='form-fields'):
+            with FormFields(id='form-fields'):
                 yield Label(tr('公钥'))
                 with HorizontalScroll(id='public-key-scroll'):
                     yield Static(Text(self.public_key, no_wrap=True, overflow='ignore'), id='public-key')

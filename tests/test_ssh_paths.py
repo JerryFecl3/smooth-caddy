@@ -123,7 +123,7 @@ class SSHPathUITests(unittest.IsolatedAsyncioTestCase):
                 await pilot.press('enter');await pilot.pause()
                 editor=ui.screen.query_one('#value',TextArea)
                 self.assertIs(ui.focused,editor)
-                self.assertEqual(editor.content_size.height,4)
+                self.assertEqual(editor.content_size.height,3)
                 self.assertGreaterEqual(editor.content_size.width,45)
                 await pilot.press('ctrl+s');await pilot.pause()
                 self.assertIn('不能为空',str(ui.screen.query_one('#form-error').content))

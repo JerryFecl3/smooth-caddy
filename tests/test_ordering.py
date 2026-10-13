@@ -25,8 +25,8 @@ class OrderingTests(unittest.IsolatedAsyncioTestCase):
                         table.focus()
                         await pilot.pause()
                         table.move_cursor(row=0, column=1)
-                        await pilot.press('f7')  # First row stays in place.
-                        await pilot.press('f8')
+                        await pilot.press('ctrl+up')  # First row stays in place.
+                        await pilot.press('ctrl+down')
                         await pilot.pause()
                         if page == 'public_tls':
                             ui.public_tls_page.refresh_records()
@@ -35,11 +35,11 @@ class OrderingTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(table.cursor_column, 1, page)
                         ids = [item['id'] for item in ui.public_tls_page.records] if page == 'public_tls' else ui.row_ids
                         self.assertEqual(ids, expected[page][::-1])
-                        await pilot.press('f8')  # Last row stays in place.
-                        await pilot.press('f7', 'f8')
+                        await pilot.press('ctrl+down')  # Last row stays in place.
+                        await pilot.press('ctrl+up', 'ctrl+down')
                         ui.query_one('#nav').focus()
                         await pilot.pause()
-                        await pilot.press('f7')  # Navigation focus must not reorder.
+                        await pilot.press('ctrl+up')  # Navigation focus must not reorder.
                         if page != 'public_tls':
                             self.assertEqual([item.id for item in getattr(app.snapshot(), page)], expected[page][::-1])
                     # Editing certificate credentials must not move the record.

@@ -7,10 +7,10 @@ Smooth Caddy 用于维护一个网络中的多节点 Caddy 配置。区域定义
 各模块的作用
 
 设置
-区域和存档统一在设置页顶部切换，右侧可导入配置或修改口令。导入配置确认后直接应用于当前，不创建存档。进入设置默认显示区域，关闭口令弹窗后保留当前子页。部署始终为主导航第一项。
+区域和存档统一在设置页顶部切换，右侧可导入配置、修改口令或选择语言，窄窗口时操作组换行。导入配置确认后直接应用于当前，不创建存档。进入设置默认显示区域，关闭口令弹窗后保留当前子页。部署始终为主导航第一项。
 
 部署
-总览按节点、区域、站点的配置顺序展示最终 SSH 目标、绑定地址端口及站点服务方式。只使用当前设置。左侧导出、部署针对选中节点，右侧全部导出、全部部署针对所有节点。列表回车不触发操作。选择 Caddy 版本后执行。两者共用证书准备与临时打包流程，不保存生成材料。
+顶部导航包含帮助和退出。总览分为节点入口表和站点服务表，宽窗口左右排列、窄窗口上下排列；站点只展示一次，选择节点不改变站点表。站点表只读，可滚动浏览，不接受点击选择。Tab 依次切换导航、节点表和底部操作。两表沿用节点、区域、站点的配置顺序。只使用当前设置。左侧导出、部署针对选中节点，右侧全部导出、全部部署针对所有节点（Ctrl+E／Ctrl+D）。节点页 Ctrl+E 显示 SSH 公钥，mTLS 页 Ctrl+G 打开 CA 管理，TLS 页 Ctrl+S 全部申请。列表回车不触发操作。选择 Caddy 版本后执行。两者共用证书准备与临时打包流程，不保存生成材料。
 
 设置 → 存档
 保存当前站点、节点、区域、顺序及各站点源证书校验选项，“新增存档”保存当前设置；载入、删除、导出针对选中存档。列表回车无默认操作。不包含 TLS/mTLS 配置、凭据和材料。恢复或导入先确认整体替换，不自动保存旧设置；使用存档部署须先恢复。设置顶部的“导入配置”填写 JSON 路径；导出选中存档时预填 ~/smooth-caddy-export/settings/ 下的保存路径，可修改，已有文件需确认覆盖。
@@ -32,7 +32,7 @@ TLS证书
 
 列表排序
 
-在节点、站点、区域、TLS证书列表中，F7 / F8 上移／下移当前条目，立即保存顺序；仅列表获得焦点时生效。
+在节点、站点、区域、TLS证书列表中，Ctrl+↑ / Ctrl+↓ 上移／下移当前条目，立即保存顺序；仅列表获得焦点时生效。
 
 推荐使用流程
 
@@ -41,7 +41,7 @@ TLS证书
 3. 添加站点，配置域名、源头、TLS 来源及各区域的服务方式。
 4. 使用公共 CA 时，先在“TLS证书”中配置对应域名和 DNS 凭据，并准备 lego。需要用户 mTLS 时，签发 Client 证书并导出 P12。
 5. 修正界面标记的配置错误。待申请、待续签可以交给部署或 .run 导出流程处理，不必逐条手动申请。
-6. 在“部署”选择部署当前设置，或导出 .run。流程只准备本次需要的公共证书，再临时生成运行材料。
+6. 在“部署”选择部署当前设置，或导出部署包。流程只准备本次需要的公共证书，再临时生成运行材料。
 7. 在“设置 → 存档”新增、载入或导出存档；使用设置顶部“导入配置”直接替换当前设置。离线 .run 拷贝到目标节点执行 sh 文件.run；远程部署前，在节点页查看 SSH 公钥说明并完成目标节点授权。
 
 后续维护
@@ -52,7 +52,7 @@ TLS证书
 
 语言
 
-启动时自动跟随系统语言：中文环境使用简体中文，其他环境使用英文。不保存语言偏好。--language zh-CN 或 --language en 可临时覆盖。用户名称、域名、证书内容及外部工具输出不翻译。
+启动时自动跟随系统语言：中文环境使用简体中文，其他环境使用英文。设置 → 语言可选择自动、English 或中文，保存后下次启动生效。--language zh-CN 或 --language en 可临时覆盖。用户名称、域名、证书内容及外部工具输出不翻译。
 
 第三方软件与服务条款
 
@@ -79,10 +79,10 @@ Smooth Caddy manages Caddy configurations across multiple nodes. Regions define 
 Modules
 
 Settings
-Switch between Regions and Archives at the top; Import configuration and Change password are on the right. Import applies directly to current settings without creating an archive. Settings opens Regions by default. Closing the password dialog keeps the current tab. Deployment remains first in navigation.
+Switch between Regions and Archives at the top; Import configuration, Change password and Language are on the right, wrapping together on narrow terminals. Import applies directly to current settings without creating an archive. Settings opens Regions by default. Closing the password dialog keeps the current tab. Deployment remains first in navigation.
 
 Deployment
-The overview follows node, region and site configuration order, showing final SSH targets, bindings and site service modes. Left-side Export and Deploy act on the selected node; right-side Export all and Deploy all act on every node. Enter on the list does nothing. Settings archives are managed separately. Both actions prepare certificates and generate runtime materials temporarily.
+Top navigation includes Help and Quit. The overview separates node bindings and site services into two tables, side by side on wide terminals and stacked on narrow terminals. Sites appear once; selecting a node does not change the site table. The site table is read-only and scrollable, with no click selection. Tab cycles through navigation, nodes and actions. Both tables follow configuration order. Left-side Export and Deploy act on the selected node; right-side Export all and Deploy all act on every node (Ctrl+E / Ctrl+D). On Nodes, Ctrl+E shows the SSH public key; on mTLS, Ctrl+G opens CA management; on TLS, Ctrl+S requests all certificates. Enter on the list does nothing. Settings archives are managed separately. Both actions prepare certificates and generate runtime materials temporarily.
 
 Settings → Archives
 Save sites, nodes, regions, ordering and per-site origin verification options; New archive saves current settings; Load, Delete and Export act on the selected archive. Enter on the list has no default action. TLS/mTLS settings, credentials and materials are excluded. Restore/import replaces current settings after confirmation without automatically archiving previous settings. Restore first to deploy archived settings. Import configuration is available at the top of Settings and accepts a JSON file path; exporting the selected archive prefills an editable path under ~/smooth-caddy-export/settings/ and confirms overwriting existing files.
@@ -120,7 +120,7 @@ This application does not manage DNS records for routing, network routes, port f
 
 Language
 
-The interface follows your system language at startup: Simplified Chinese for Chinese locales, English otherwise. No language preference is saved. The --language zh-CN or --language en option overrides detection for that launch. Names you enter, domains, certificate contents, and external tool output are not translated.
+The interface follows your system language at startup: Simplified Chinese for Chinese locales, English otherwise. Choose Auto, English, or 中文 in Settings → Language; saved changes take effect on next launch. The --language zh-CN or --language en option overrides detection for that launch. Names you enter, domains, certificate contents, and external tool output are not translated.
 
 Third-party software and terms
 
@@ -140,7 +140,7 @@ https://letsencrypt.org/repository/
 These are brief descriptions; the official terms govern."""
 
 
-ENGLISH_GUIDE += "\n\nList ordering\n\nIn Nodes, Sites, Regions and TLS Certificates, F7 / F8 moves the selected item and saves the order immediately. Only active while the list has focus."
+ENGLISH_GUIDE += "\n\nList ordering\n\nIn Nodes, Sites, Regions and TLS Certificates, Ctrl+↑ / Ctrl+↓ moves the selected item and saves the order immediately. Only active while the list has focus."
 
 
 def usage_guide():

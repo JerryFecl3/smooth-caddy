@@ -47,3 +47,26 @@ class ServiceFormTests(unittest.IsolatedAsyncioTestCase):
                 await pilot.press('ctrl+s');await pilot.pause()
                 self.assertEqual(app.snapshot().sites[0].areas[rid],Service(True,'private_ca',False))
                 self.assertEqual(ui.cell_value(ui.demo.sites[0],'area:'+rid),'TLS')
+
+                # Disabling hides every other check without discarding saved overrides.
+                table.focus();await pilot.press('enter');await pilot.pause()
+                form=ui.screen
+                form.query_one('#enabled',Checkbox).value=False;await pilot.pause()
+                for checkbox in form.query(Checkbox):
+                    self.assertEqual(checkbox._button.plain, '[ ]')
+                    self.assertEqual(checkbox.styles.opacity, 1.0)
+                self.assertTrue(form.query_one('#custom',Checkbox).value)
+                await pilot.press('ctrl+s');await pilot.pause()
+                self.assertEqual(app.snapshot().sites[0].areas[rid],Service(False,'private_ca',False))
+                table.focus();await pilot.press('enter');await pilot.pause()
+                form=ui.screen
+                for checkbox in form.query(Checkbox):
+                    self.assertEqual(checkbox._button.plain, '[ ]')
+                    self.assertEqual(checkbox.styles.opacity, 1.0)
+                form.query_one('#enabled',Checkbox).value=True;await pilot.pause()
+                self.assertEqual(form.query_one('#custom',Checkbox)._button.plain, '[x]')
+                self.assertEqual(form.query_one('#tls_source',ChoiceRow).value,'private_ca')
+                self.assertEqual(form.query_one('#mtls',ChoiceRow).value,False)
+                self.assertEqual(form.query_one('#mtls',ChoiceRow).query(Checkbox)[0]._button.plain, '[x]')
+                await pilot.press('ctrl+s');await pilot.pause()
+                self.assertEqual(app.snapshot().sites[0].areas[rid],Service(True,'private_ca',False))

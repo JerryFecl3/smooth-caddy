@@ -114,7 +114,7 @@ class PublicCombinedTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(result['success']);model=TaskState()
             for e in events:model.update(e)
             self.assertEqual([name for name,_ in model.sections()],['申请公共TLS证书','准备运行材料','部署到节点'])
-            model.finish('success');self.assertEqual(model.counts(),(3,3))
+            model.finish('success');self.assertEqual(model.counts(),(len(model.steps),len(model.steps)))
         finally:fixture.doCleanups()
 
 class PublicSourceUITests(unittest.IsolatedAsyncioTestCase):

@@ -29,6 +29,10 @@ class ServiceForm(Form):
         enabled=self.query_one('#enabled',Checkbox).value
         custom=self.query_one('#custom',Checkbox)
         custom.disabled=not enabled
+        for checkbox in self.query(Checkbox):
+            if checkbox.id != 'enabled':
+                checkbox.set_class(not enabled, 'hide-check')
+                checkbox.refresh()
         for key,default in zip(('tls_source','mtls'),self.defaults):
             control=self.query_one('#'+key,ChoiceRow)
             if not custom.value:

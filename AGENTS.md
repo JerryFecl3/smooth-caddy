@@ -60,8 +60,9 @@ the database directly at `~/.smooth-caddy/smooth-caddy.db`. Exports always use
 ## Versioning and compatibility
 
 - Follow `docs/development.md`'s version/release contract: tags `vX.Y.Z`, artifacts `X.Y.Z.<short-commit>`; initial tag `v0.1.0`.
-- Conventionally increase Z for each commit; persistent data-format changes increase Y and reset Z. This is a documentation convention, not an automated commit gate.
-- GitHub release builds are triggered by version-tag pushes, not ordinary branch commits; read the triggering tag and its commit. Initial targets: Linux x64 and Windows x64.
+- Main-branch releases automatically increase Z. Increase Y only at the user's explicit request, never merely because data formats change. An explicit version uses a single `Release-Version: X.Y.Z` line in the submitted commit message.
+- Main-branch commits trigger tests, native builds and formal GitHub Releases for Linux x64 and Windows x64. Freeze the triggering commit and selected version; publish the remote tag only after both builds and attestations succeed.
+- Submit remote changes through the GitHub plugin only. Do not substitute gh CLI, git push, CLI login, or browser commits. Local Git inspection and development remain allowed.
 - Data migrations and compatibility layers are permitted. Support starts from the first formal release; back up before migrations and reject writes to newer formats.
 - Current database format is 11 (backed-up migration from 2–10). Settings archive / JSON format is 5 (reads 1–5). Legacy batch metadata 1–5 is decoded read-only for one-time settings extraction. New runtime materials are ephemeral, not persistent batches. Persist stable identifiers, never translated labels.
 - Public repository, MIT project license; preserve third-party license obligations. Keep private data, backups, caches and generated exports out of Git.

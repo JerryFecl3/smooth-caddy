@@ -121,5 +121,5 @@ class CombinedDeploymentTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result['success'])
         self.assertEqual([name for name,_ in model.sections()],['准备运行材料','部署到节点'])
         self.assertTrue(all(e.steps==events[0].steps and e.groups==events[0].groups for e in events))
-        model.finish('success');self.assertEqual(model.counts(),(2,2))
+        model.finish('success');self.assertEqual(model.counts(),(10,10))
         self.assertIn(result['batch'].version,model.notes.values())

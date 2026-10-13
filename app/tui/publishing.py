@@ -3,10 +3,10 @@ from ..i18n import tr
 import asyncio
 from textual import on
 from textual.containers import Vertical,Horizontal
-from textual.widgets import Static,DataTable
+from textual.widgets import Static
 from textual.screen import ModalScreen
 from textual.binding import Binding
-from .widgets import Button
+from .widgets import Button, DataTable
 from .dialogs import Form, PasswordDialog
 
 
@@ -20,14 +20,14 @@ class Export(ModalScreen):
 
     def compose(self):
         with Vertical(id='dialog'):
-            yield Static({'deploy':tr('部署当前设置'),'new-deploy':tr('部署当前设置'),'package':tr('导出 .run')}[self.mode],id='dialog-title')
+            yield Static({'deploy':tr('部署当前设置'),'new-deploy':tr('部署当前设置'),'package':tr('导出部署包')}[self.mode],id='dialog-title')
             yield Static(tr('全部节点') if self.node_ids is None else tr('选中节点'),id='operation-scope',markup=False)
             yield Static(tr('联网更新版本列表中'),id='version-refresh',markup=False)
             yield DataTable(id='versions',cursor_type='row')
             yield Static('',id='job-status',markup=False)
             with Horizontal(classes='dialog-actions'):
                 yield Button(tr('返回 · Esc'),id='cancel')
-                yield Button({'deploy':tr('部署'),'new-deploy':tr('部署'),'package':tr('导出 .run')}[self.mode]+' · ^s',id='generate')
+                yield Button({'deploy':tr('部署'),'new-deploy':tr('部署'),'package':tr('导出部署包')}[self.mode]+' · ^s',id='generate')
 
     def on_mount(self):
         service=self.app.application
@@ -48,7 +48,8 @@ class Export(ModalScreen):
         selected=self.selected_version();cache=self.app.application.releases.cache.versions()
         arches=sorted({node.arch for node in self.config.nodes})
         table=self.query_one('#versions',DataTable);table.clear(columns=True)
-        table.add_columns(tr('版本'),tr('来源'),*arches)
+        for label in (tr('版本'), tr('来源'), *arches):
+            table.add_column(label, min_width=8, max_width=32)
         self.versions=list(dict.fromkeys(online+sorted(cache,reverse=True)))
         for version in self.versions:
             table.add_row(version,tr('官方 / 本地') if version in online and version in cache else tr('官方') if version in online else tr('本地'),
@@ -84,7 +85,7 @@ class Export(ModalScreen):
             if self.mode=='package':
                 def operation(progress,steps,cancel):
                     return app.application.batches.export(version,password,progress=progress,task_progress=steps,cancel=cancel,node_ids=self.node_ids)
-                panel=TaskProgress(tr('导出 .run'),operation,lambda package:str(app.application.releases.directory(package).resolve()),success_title=tr('安装包已导出'))
+                panel=TaskProgress(tr('导出部署包'),operation,lambda package:str(app.application.releases.directory(package).resolve()),success_title=tr('安装包已导出'))
             else:panel=DeploymentProgress(None,version,self.node_ids)
             self.dismiss(None)
             app.call_after_refresh(lambda:app.push_screen(panel,lambda _:app.after_change('')))

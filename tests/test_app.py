@@ -19,11 +19,25 @@ class EntryTests(unittest.TestCase):
 
     def test_system_language_and_explicit_override(self):
         from app.i18n import get_language
-        with patch('app.entry.system_language', return_value='en'), patch('app.tui.ui.main'):
-            main([])
+        with tempfile.TemporaryDirectory() as directory, patch('app.entry.system_language', return_value='en'), patch('app.tui.ui.main'):
+            main(['--data-dir', directory])
             self.assertEqual(get_language(), 'en')
             main(['--language', 'zh-CN'])
             self.assertEqual(get_language(), 'zh-CN')
+
+    def test_saved_language_and_cli_precedence(self):
+        from app.preferences import save_language
+        from app.i18n import get_language
+        with tempfile.TemporaryDirectory() as directory, patch('app.tui.ui.main'):
+            for preference, expected in [('en', 'en'), ('zh-CN', 'zh-CN'), ('auto', 'zh-CN')]:
+                save_language(directory, preference)
+                main(['--data-dir', directory])
+                self.assertEqual(get_language(), expected)
+            save_language(directory, 'zh-CN')
+            main(['--data-dir', directory, '--language', 'en'])
+            self.assertEqual(get_language(), 'en')
+            from app.preferences import load_language
+            self.assertEqual(load_language(directory), 'zh-CN')
 
     def test_data_directory_forwarded(self):
         with tempfile.TemporaryDirectory() as directory,patch('app.tui.ui.main') as run:

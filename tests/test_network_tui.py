@@ -303,7 +303,7 @@ class TerminalTests(unittest.IsolatedAsyncioTestCase):
             try:
                 ui=Terminal(service)
                 async with ui.run_test(size=(140,40)) as pilot:
-                    self.assertEqual(ui.query_one('#help',Button).render().plain,'帮助 · F10')
+                    self.assertEqual(ui.query_one('#help',Button).render().plain,'帮助')
                     for number,page in enumerate(('deployment','sites','nodes','clients','public_tls','regions'),1):
                         await pilot.press(f'f{number}');await pilot.pause()
                         self.assertEqual(ui.page,page)
@@ -482,7 +482,7 @@ class ConfirmationStyleTests(unittest.IsolatedAsyncioTestCase):
                         ui.show_shortcuts=False
                         self.assertEqual(back.render().plain,'返回')
                         ui.show_shortcuts=True
-                        self.assertEqual(back.render().plain,'返回 · Esc')
+                        self.assertEqual(back.render().plain,'返回 Esc')
                         await pilot.press('escape')
                         await pilot.pause()
                         self.assertEqual(answers,[None])

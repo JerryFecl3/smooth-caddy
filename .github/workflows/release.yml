@@ -1,14 +1,38 @@
 name: Release
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: release-${{ github.ref }}
+  group: formal-release
   cancel-in-progress: false
 jobs:
+  plan:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      commit: ${{ steps.version.outputs.commit }}
+      published: ${{ steps.version.outputs.published }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Select release version
+        id: version
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python tools/auto_release.py plan
   build:
+    needs: plan
+    if: needs.plan.outputs.published != 'true'
     permissions:
       contents: read
       id-token: write
@@ -18,21 +42,48 @@ jobs:
       matrix:
         os: [ubuntu-22.04, windows-2022]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      RELEASE_TAG: ${{ needs.plan.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.plan.outputs.commit }}
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
           architecture: x64
+      - name: Prepare local build tag
+        shell: bash
+        run: |
+          if ! git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            git tag "$RELEASE_TAG" "$GITHUB_SHA"
+          fi
+          test "$(git rev-parse "refs/tags/$RELEASE_TAG^{}")" = "$GITHUB_SHA"
       - name: Install build dependencies
         run: python -m pip install -r requirements-build.txt
       - name: Install project
         run: python -m pip install -e .
+      - name: Audit source
+        run: python tools/audit_source.py
       - name: Test
-        run: python -m unittest discover -s tests
+        shell: bash
+        run: |
+          set -o pipefail
+          python -u -m unittest discover -v -s tests 2>&1 | tee test-results.log
+      - name: Preserve test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-test-results-${{ matrix.os }}
+          path: test-results.log
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Build tagged release
+        env:
+          GITHUB_REF_NAME: ${{ needs.plan.outputs.tag }}
         run: python tools/build_release.py
       - name: Attest release packages
         uses: actions/attest@v4
@@ -48,30 +99,35 @@ jobs:
             dist/*.zip
             dist/*.sha256
           if-no-files-found: error
+          retention-days: 14
   publish:
-    needs: build
+    needs: [plan, build]
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     permissions:
       contents: write
+    env:
+      RELEASE_TAG: ${{ needs.plan.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.plan.outputs.commit }}
           fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
       - uses: actions/download-artifact@v4
         with:
+          pattern: binaries-*
           path: dist
           merge-multiple: true
+      - name: Prepare local notes tag
+        run: |
+          if ! git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            git tag "$RELEASE_TAG" "$GITHUB_SHA"
+          fi
       - name: Publish release
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
-          RELEASE_COMMIT: ${{ github.sha }}
-        run: |
-          notes="$RUNNER_TEMP/release-notes.md"
-          python3 tools/release_notes.py "$RELEASE_TAG" --repo "$GH_REPO" --output "$notes"
-          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" --verify-tag --target "$RELEASE_COMMIT" --title "Smooth Caddy $RELEASE_TAG" --notes-file "$notes" --draft
-          fi
-          gh release upload "$RELEASE_TAG" dist/* --clobber
-          gh release edit "$RELEASE_TAG" --draft=false
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python tools/auto_release.py publish --tag "$RELEASE_TAG"

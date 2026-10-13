@@ -1,5 +1,6 @@
 """Direct/relay editor retaining the existing optional URL data format."""
 from textual import on
+from textual.widgets import Label
 from .choice_row import ChoiceRow
 from ..i18n import tr
 from ..network.models import relay_endpoint
@@ -21,6 +22,7 @@ class UpstreamForm(Form):
 
     def compose_fields(self):
         yield ChoiceRow(self.fields[0].choices,self.fields[0].value,id='mode')
+        yield Label(tr('中继 HTTPS 地址（指向现有服务，避免转发环路）'))
         yield Input(str(self.fields[1].value),id='value',placeholder=self.fields[1].placeholder)
 
     def sync_enabled(self):
