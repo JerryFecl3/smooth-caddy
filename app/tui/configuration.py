@@ -65,7 +65,7 @@ def edit_configuration(self):
                 Field('verify',tr('校验 HTTPS 源证书'),obj.verify_origin_https,boolean=True),
                 Field('redirect',tr('首页跳转路径'),obj.homepage_redirect),
                 Field('paths',tr('允许访问路径'), '\n'.join(obj.allowed_paths),multiline=True)]
-        note=tr('首页跳转仅作用于 /；允许路径每行一条，留空不限制。不匹配返回 404。')
+        note=tr('首页跳转仅作用于 /；允许路径每行一条，留空不限制。不匹配返回 404。')+'\n'+tr('首页跳转可带查询参数，参数会显示在浏览器地址中。')
         def validator(v):
             from ..network.models import validate_site_paths
             try: validate_site_paths(v['redirect'],[p.strip() for p in v['paths'].splitlines() if p.strip()])

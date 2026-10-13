@@ -645,9 +645,10 @@ EN.update({'未启用':'Not enabled'})
 
 EN.update({
  '首页跳转路径': 'Homepage redirect path',
+ '首页跳转可带查询参数，参数会显示在浏览器地址中。': 'Redirects may include query parameters, which will appear in the browser address.',
  '允许访问路径': 'Allowed paths',
  '路径配置格式无效': 'Invalid path configuration format',
- '首页跳转须为本站非根路径，如 /ui/，不含查询参数': 'Use a local non-root redirect path, e.g. /ui/, without a query string',
+ '首页跳转须为本站非根路径，可带查询参数，如 /ui/?host=10.10.10.1；不支持片段或占位符': 'Use a local non-root path with an optional query, e.g. /ui/?host=10.10.10.1; fragments and placeholders are not supported',
  '允许访问路径须为目录路径，每行一条，如 /s/，不支持通配符或查询参数': 'Enter one directory path per line, e.g. /s/, without wildcards or query strings',
  '首页跳转目标必须在允许访问路径内': 'The homepage redirect target must be within an allowed path',
  '首页跳转仅作用于 /；允许路径每行一条，留空不限制。不匹配返回 404。': 'Redirect applies only to /. Enter allowed paths one per line; leave blank for unrestricted access. Other paths return 404.',

@@ -88,7 +88,7 @@ class HTTPSPolicyTests(unittest.TestCase):
             for name,data in files.items():
                 path=root/name;path.parent.mkdir(parents=True,exist_ok=True)
                 path.write_bytes(data.replace(b'/etc/smooth-caddy/releases/test',str(root).encode()) if name=='caddy.json' else data)
-            result=subprocess.run([binary,'validate','--config',str(root/'caddy.json')],capture_output=True,text=True)
+            result=subprocess.run([binary,'validate','--config',str(root/'caddy.json')],capture_output=True,text=True,encoding='utf-8',errors='backslashreplace',timeout=15)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
 
     def test_v8_migration_and_format2_json_copy_shared_port(self):

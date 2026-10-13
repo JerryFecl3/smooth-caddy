@@ -2,7 +2,6 @@ import ast
 import os
 from pathlib import Path
 import string
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -10,6 +9,7 @@ from unittest.mock import patch, Mock
 
 from app.i18n import get_language, system_language, set_language, tr
 from app.messages import EN
+from tests.support import run_python
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -63,9 +63,7 @@ class LanguageTests(unittest.TestCase):
             path = Path(directory) / 'ui.json'
             path.write_text('invalid old settings', encoding='utf-8')
             def help_text(*args):
-                return subprocess.run([sys.executable, 'smooth_caddy.py', '--data-dir', directory,
-                                       *args, '--help'], cwd=ROOT, check=True,
-                                      capture_output=True, text=True, encoding='utf-8').stdout
+                return run_python('smooth_caddy.py', '--data-dir', directory, *args, '--help').stdout
             self.assertNotIn('个人网络', help_text('--language', 'en'))
             self.assertIn('个人网络', help_text('--language', 'zh-CN'))
             help_text()
@@ -77,10 +75,7 @@ class LanguageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             for language, chinese in [('zh_Hant_TW.UTF-8', True), ('en_US.UTF-8', False), ('C', False)]:
                 environment = dict(os.environ, LC_ALL=language, LANG='zh_CN.UTF-8')
-                result = subprocess.run(
-                    [sys.executable, 'smooth_caddy.py', '--data-dir', directory, '--help'],
-                    cwd=ROOT, env=environment, check=True, capture_output=True,
-                    text=True, encoding='utf-8')
+                result = run_python('smooth_caddy.py', '--data-dir', directory, '--help', env=environment)
                 self.assertEqual('个人网络' in result.stdout, chinese, result.stdout)
             self.assertEqual(list(Path(directory).iterdir()), [])
 
@@ -97,18 +92,14 @@ from app.tui.dialogs import InitializationDialog
 from app.tui.labels import options
 from app.tui.guide import usage_guide
 from textual.widgets import Input, Select, Button
+from tests.support import wait_for_screen, wait_until
 async def check():
     with tempfile.TemporaryDirectory() as directory:
         app = Application(directory)
         try:
             ui = Terminal(app)
             async with ui.run_test(size=(140, 40)) as pilot:
-                # Startup pushes the dialog after a refresh. A single pause can
-                # return after it enters the stack but before its children mount.
-                async def wait_for_initialization():
-                    while not (isinstance(ui.screen, InitializationDialog) and ui.screen.is_mounted):
-                        await asyncio.sleep(0.01)
-                await asyncio.wait_for(wait_for_initialization(), timeout=10)
+                await wait_for_screen(ui, InitializationDialog, controls=('#password', '#repeat', '#name', '#save'))
                 await pilot.pause()
                 assert isinstance(ui.screen, InitializationDialog)
                 assert ui.screen.caption == 'Initialize', ui.screen.caption
@@ -116,6 +107,7 @@ async def check():
                     ui.screen.query_one('#' + key, Input).value = 'test-secret'
                 ui.screen.query_one('#name', Input).value = 'Test CA'
                 await pilot.press('ctrl+s')
+                await wait_until(lambda: len(ui.screen_stack) == 1, description='initialization saved')
                 await pilot.pause()
                 assert len(ui.screen_stack) == 1
                 assert not ui.query('#language')
@@ -130,12 +122,5 @@ async def check():
 asyncio.run(check())
 print('ENGLISH_UI_OK')
 '''
-        # Windows children otherwise inherit a code-page encoding while the
-        # parent decodes UTF-8; a reader-thread decode failure can leave None.
-        environment = dict(os.environ, PYTHONIOENCODING='utf-8', PYTHONUTF8='1')
-        result = subprocess.run([sys.executable, '-c', script], cwd=ROOT, env=environment,
-                                capture_output=True, text=True, encoding='utf-8',
-                                errors='backslashreplace', timeout=60)
-        output = (result.stdout or '') + (result.stderr or '')
-        self.assertEqual(result.returncode, 0, output)
-        self.assertIn('ENGLISH_UI_OK', result.stdout or '', output)
+        result = run_python('-c', script)
+        self.assertIn('ENGLISH_UI_OK', result.stdout)

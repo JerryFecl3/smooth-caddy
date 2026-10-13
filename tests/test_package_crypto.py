@@ -15,9 +15,9 @@ class PackageCryptoTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)/'encrypted';path.write_bytes(encrypted)
             cmd=['openssl','enc','-d','-aes-256-cbc','-pbkdf2','-iter','100000','-md','sha256','-S',salt,'-in',str(path),'-pass','stdin']
-            result=subprocess.run(cmd,input='导出 secret\n'.encode(),capture_output=True)
+            result=subprocess.run(cmd,input='导出 secret\n'.encode(),capture_output=True,timeout=15)
             self.assertEqual(result.returncode,0);self.assertEqual(result.stdout,payload)
-            wrong=subprocess.run(cmd,input=b'wrong\n',capture_output=True)
+            wrong=subprocess.run(cmd,input=b'wrong\n',capture_output=True,timeout=15)
             self.assertNotEqual(wrong.returncode,0)
         other,_=encrypt_payload(payload,'导出 secret');self.assertNotEqual(other,encrypted)
 
@@ -29,7 +29,7 @@ class PackageCryptoTests(unittest.TestCase):
         self.assertNotIn(b'export',header)
         self.assertIn(b'openssl enc -d',header)
         self.assertFalse(payload.startswith(b'\x1f\x8b'))
-        self.assertEqual(subprocess.run(['sh','-n'],input=header,capture_output=True).returncode,0)
+        self.assertEqual(subprocess.run(['sh','-n'],input=header,capture_output=True,timeout=15).returncode,0)
 
     def test_batch_key_survives_password_change_and_ca_reset(self):
         with tempfile.TemporaryDirectory() as directory:

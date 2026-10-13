@@ -6,7 +6,8 @@ from cryptography.x509.oid import NameOID
 from textual.widgets import Input
 from app.network.application import Application
 from app.tui.ui import Terminal
-from app.tui.dialogs import InitializationDialog
+from app.tui.dialogs import InitializationDialog, PasswordDialog, Form
+from tests.support import wait_for_screen, wait_until
 
 class StartupTests(unittest.IsolatedAsyncioTestCase):
     async def test_first_launch_combined_initialization(self):
@@ -15,7 +16,7 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
             try:
                 ui=Terminal(app)
                 async with ui.run_test(size=(140,40)) as pilot:
-                    await pilot.pause()
+                    await wait_for_screen(ui, InitializationDialog, controls=('#password', '#save'))
                     self.assertIsInstance(ui.screen,InitializationDialog)
                     self.assertFalse(app.security.initialized)
                     for key in ('password','repeat'):ui.screen.query_one('#'+key,Input).value='test-secret'
@@ -25,7 +26,7 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIn('Personal WEB',ui.screen.query_one('#name',Input).placeholder)
                     ui.screen.query_one('#name',Input).value='abc'
                     await pilot.press('ctrl+s');await pilot.pause()
-                    self.assertEqual(len(ui.screen_stack),1)
+                    await wait_until(lambda: len(ui.screen_stack)==1, description='initialization saved')
                     self.assertTrue(app.security.unlocked);self.assertTrue(app.ssh.initialized)
                     config=app.snapshot()
                     self.assertEqual([r.name for r in config.regions],['Private','Public'])
@@ -58,15 +59,16 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
             try:
                 ui=Terminal(app)
                 async with ui.run_test() as pilot:
-                    await pilot.pause();await pilot.press('escape');await pilot.pause()
+                    await wait_for_screen(ui, InitializationDialog, controls=('#password', '#save'))
+                    await pilot.press('escape');await pilot.pause()
                     self.assertFalse(ui.is_running);self.assertFalse(app.security.initialized)
                 app.security.setup('test-secret');app.security.lock()
                 ui=Terminal(app)
                 async with ui.run_test() as pilot:
-                    await pilot.pause();self.assertEqual(ui.screen.caption,'解锁程序')
+                    await wait_for_screen(ui, PasswordDialog, controls=('#password', '#save'), caption='解锁程序')
                     ui.screen.query_one('#password',Input).value='test-secret'
                     await pilot.press('ctrl+s');await pilot.pause()
-                    self.assertEqual(ui.screen.caption,'创建 CA')
+                    await wait_for_screen(ui, Form, controls=('#save',), caption='创建 CA')
                     await pilot.press('escape');await pilot.pause()
                     self.assertFalse(ui.is_running);self.assertFalse(app.certificates.initialized)
             finally:app.close()
@@ -80,7 +82,8 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
                 app.store.db.execute("DELETE FROM secrets WHERE name='ssh-public'")
                 app.security.lock();ui=Terminal(app)
                 async with ui.run_test() as pilot:
-                    await pilot.pause();ui.screen.query_one('#password',Input).value='test-secret'
+                    await wait_for_screen(ui, PasswordDialog, controls=('#password', '#save'))
+                    ui.screen.query_one('#password',Input).value='test-secret'
                     await pilot.press('ctrl+s');await pilot.pause()
                     self.assertEqual(app.ssh.public(),public);self.assertEqual(len(ui.screen_stack),1)
             finally:app.close()

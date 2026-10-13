@@ -36,13 +36,13 @@ def setup(app):
 
 class PathTests(unittest.TestCase):
     def test_validation_and_archives(self):
-        for redirect,paths in [('',[]),('/ui/',[]),('/s/start',['/s/']),('/s',['/s/']),('/ui/',['/'])]:
+        for redirect,paths in [('',[]),('/ui/',[]),('/s/start',['/s/']),('/s',['/s/']),('/ui/',['/']),('/ui?secret=x',[]),('/s?secret=a%26b%3Dc',['/s/']),('/s/?host=10.10.10.1&port=9090&secret=x',['/s/'])]:
             validate_site_paths(redirect,paths)
-        for redirect,paths in [('/',[]),('//elsewhere',[]),('/ui?secret=x',[]),('/s/../admin',[]),
+        for redirect,paths in [('/',[]),('//elsewhere',[]),('/?secret=x',[]),('/ui?x=1#fragment',[]),('/ui?secret={host}',[]),('/ui?x=%zz',[]),('/ui?x=bad\r\nvalue',[]),('/admin?next=/s/',['/s/']),('/s/../admin',[]),
                                ('/ui/', ['/s/']),('', ['s/']),('', ['/s*']),('', ['/s/%2e']),
                                ('', ['/s/../']),('', ['/s\\admin']),('', ['/s/{query}']),('', ['/s/\n'])]:
             with self.subTest(redirect=redirect,paths=paths),self.assertRaises(ValueError):validate_site_paths(redirect,paths)
-        cfg=Configuration(sites=[Site('a'*32,'Web',homepage_redirect='/s/start',allowed_paths=['/s/'])])
+        cfg=Configuration(sites=[Site('a'*32,'Web',homepage_redirect='/s/start?secret=a%26b%3Dc',allowed_paths=['/s/'])])
         current=encode(cfg,'Test');self.assertEqual(current['format'],5);self.assertEqual(decode(current),cfg)
         old=deepcopy(current);old['format']=4
         for site in old['configuration']['sites']:
@@ -97,12 +97,12 @@ class PathFormTests(unittest.IsolatedAsyncioTestCase):
                 form=ui.screen
                 form.query_one('#redirect',Input).value='/blocked'
                 await pilot.press('ctrl+s');await pilot.pause();self.assertIs(ui.screen,form)
-                form.query_one('#redirect',Input).value='/assets/home'
+                form.query_one('#redirect',Input).value='/assets/home?host=10.10.10.1&port=9090&secret=example'
                 form.query_one('#paths',TextArea).load_text('/assets/\n/s/\n/assets/')
                 await pilot.press('ctrl+s');await pilot.pause()
                 self.assertEqual(len(ui.screen_stack),1)
                 site=app.snapshot().sites[0]
-                self.assertEqual(site.homepage_redirect,'/assets/home');self.assertEqual(site.allowed_paths,['/assets/','/s/'])
+                self.assertEqual(site.homepage_redirect,'/assets/home?host=10.10.10.1&port=9090&secret=example');self.assertEqual(site.allowed_paths,['/assets/','/s/'])
 
 
 @unittest.skipUnless(os.environ.get('CADDY_TEST_BINARY'),'Set CADDY_TEST_BINARY for real routing tests')
@@ -110,6 +110,8 @@ class LivePathTests(unittest.TestCase):
     def test_generated_routes_forward_only_allowed_paths(self):
         with tempfile.TemporaryDirectory() as directory,closing(Application(directory)) as app:
             cfg,rid=setup(app)
+            destination='/s/start?host=10.10.10.1&port=9090&secret=a%26b%3Dc&tag=one&tag=two'
+            cfg.sites[0].homepage_redirect=destination
             seen=[]
             class Origin(BaseHTTPRequestHandler):
                 def do_GET(self):
@@ -131,14 +133,14 @@ class LivePathTests(unittest.TestCase):
                 try:
                     with socket.create_connection(('127.0.0.1',port),timeout=.1):break
                 except OSError:time.sleep(.05)
-            for target,status in [('/',302),('/?x=1',302),('/s',200),('/s/key?x=1',200),('/assets/a.js',200),
+            for target,status in [('/',302),('/?x=1',302),('/?secret=visitor',302),(destination,200),('/s',200),('/s/key?x=1',200),('/assets/a.js',200),
                                   ('/admin',404),('/something',404),('/s/../admin',404),('/s/%2e%2e/admin',404)]:
                 with self.subTest(target=target):
                     conn=http.client.HTTPConnection('127.0.0.1',port,timeout=5)
                     try:
                         conn.request('GET',target,headers={'Host':'example.test'});response=conn.getresponse();body=response.read()
                         self.assertEqual(response.status,status)
-                        if status==302:self.assertEqual(response.getheader('Location'),'/s/start')
+                        if status==302:self.assertEqual(response.getheader('Location'),destination)
                         if status==200:self.assertEqual(body.decode(),target)
                     finally:conn.close()
-            self.assertEqual(seen,['/s','/s/key?x=1','/assets/a.js'])
+            self.assertEqual(seen,[destination,'/s','/s/key?x=1','/assets/a.js'])

@@ -120,11 +120,16 @@ def validate_site_paths(redirect, paths):
         return (path.startswith('/') and not path.startswith('//') and '//' not in path
                 and not any(c.isspace() or ord(c)<32 or ord(c)==127 or c in "\\?#%*[]{}" for c in path)
                 and not any(part in ('.','..') for part in path.split('/')))
-    if redirect and (not valid(redirect) or redirect=='/'):
-        raise ValueError(tr('首页跳转须为本站非根路径，如 /ui/，不含查询参数'))
+    redirect_path, _, query = redirect.partition('?')
+    # Keep query bytes intact in Location; never interpret them as path rules
+    # or Caddy placeholders. Reserved parameter values may use URL encoding.
+    query_valid = (not any(c.isspace() or ord(c)<32 or ord(c)==127 or c in '\\#{}' for c in query)
+                   and not re.search(r'%(?![0-9a-fA-F]{2})', query))
+    if redirect and (not valid(redirect_path) or redirect_path=='/' or not query_valid):
+        raise ValueError(tr('首页跳转须为本站非根路径，可带查询参数，如 /ui/?host=10.10.10.1；不支持片段或占位符'))
     if any(not valid(path) for path in paths):
         raise ValueError(tr('允许访问路径须为目录路径，每行一条，如 /s/，不支持通配符或查询参数'))
-    if redirect and paths and not any(path=='/' or redirect==path.rstrip('/') or redirect.startswith(path.rstrip('/')+'/') for path in paths):
+    if redirect and paths and not any(path=='/' or redirect_path==path.rstrip('/') or redirect_path.startswith(path.rstrip('/')+'/') for path in paths):
         raise ValueError(tr('首页跳转目标必须在允许访问路径内'))
 
 

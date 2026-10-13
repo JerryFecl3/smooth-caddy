@@ -16,6 +16,8 @@ import threading
 import time
 import unittest
 from cryptography import x509
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import ExtendedKeyUsageOID
 from app.network.application import Application
 from app.network.models import Service, service_policy, Listen, RELAY_SERVER_NAME, configuration_errors
@@ -98,6 +100,12 @@ class CaddyRelayTests(unittest.TestCase):
                 site.domain=('web.test','protected.test')[i]
                 site.source=f'http://127.0.0.1:{origin.server_port}'
                 site.areas[rid]=Service(True,mtls=bool(i))
+            destination='/ui/?host=10.10.10.1&port=9090&secret=example%26value'
+            cfg.sites[1].homepage_redirect=destination
+            client_id=app.certificates.sign_client('Authorized browser')
+            key,cert,_=pkcs12.load_key_and_certificates(app.certificates.export_p12(client_id,'test'),b'test')
+            (root/'authorized.pem').write_bytes(cert.public_bytes(serialization.Encoding.PEM)+app.certificates.public('client'))
+            (root/'authorized.key').write_bytes(key.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()))
             materials=generate(cfg,app.certificates,'test')
             processes=[];logs=[]
             try:
@@ -136,15 +144,21 @@ class CaddyRelayTests(unittest.TestCase):
                 for label,material in [('external',external),('user',user),('wrong-role',wrong_role)]:
                     (root/(label+'.pem')).write_bytes(material.certificate+app.certificates.public('relay' if label!='user' else 'client'))
                     (root/(label+'.key')).write_bytes(material.private_key)
-                def request(port, client=None, hostname=RELAY_SERVER_NAME, host='protected.test'):
+                def request(port, client=None, hostname=RELAY_SERVER_NAME, host='protected.test', target='/relay', redirect=False):
                     context=ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
                     context.load_verify_locations(cadata=app.certificates.public('root').decode())
                     if client:context.load_cert_chain(str(root/(client+'.pem')),str(root/(client+'.key')))
                     with socket.create_connection(('127.0.0.1',port),timeout=3) as raw:
                         with context.wrap_socket(raw,server_hostname=hostname) as sock:
-                            sock.sendall(f'GET /relay HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n'.encode())
+                            sock.sendall(f'GET {target} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n'.encode())
                             response=http.client.HTTPResponse(sock);response.begin()
-                            return response.status,response.read()
+                            body=response.read()
+                            return response.status,response.getheader('Location') if redirect else body
+                https_port=int(cfg.nodes[0].areas[rid].ports[1])
+                for client in (None,'user','external'):
+                    with self.subTest(redirect_client=client),self.assertRaises((ssl.SSLError,ConnectionError,http.client.HTTPException)):
+                        request(https_port,client,'protected.test',target='/',redirect=True)
+                self.assertEqual(request(https_port,'authorized','protected.test',target='/?ignored=yes',redirect=True),(302,destination))
                 self.assertEqual(request(relay_port,'external'),(200,b'protected.test/relay'))
                 for client in (None,'user','wrong-role'):
                     with self.subTest(client=client),self.assertRaises((ssl.SSLError,ConnectionError,http.client.HTTPException)):
