@@ -28,12 +28,12 @@ class OverviewTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(next(iter(table.columns.values())).label.plain,'节点')
                 row=table.get_row_at(0)
                 self.assertEqual(row[0].plain,'Z node\n[2001:db8::2]')
-                self.assertEqual(row[1].plain,'0.0.0.0:(80/444/8443)\n[::]:(80/444/8443)\n  Z site  '+ui.service_label(cfg.sites[0],cfg.regions[0])+'\n  A site  '+ui.service_label(cfg.sites[0],cfg.regions[0]))
+                self.assertEqual(row[1].plain,'0.0.0.0:(80/444)·中继\n[::]:(80/444)·中继\n  Z site  '+ui.service_label(cfg.sites[0],cfg.regions[0])+'\n  A site  '+ui.service_label(cfg.sites[0],cfg.regions[0]))
                 self.assertEqual(row[2].plain,'未启用')
                 self.assertFalse(ui.query_one('#page-summary').display)
                 node=ui.demo.nodes[0];area=node.areas[cfg.regions[0].id]
                 area.ports=['80','443','8443']
-                self.assertEqual(ui.deployment_cells(node,{})[1].plain.splitlines()[:2],['0.0.0.0','[::]'])
+                self.assertEqual(ui.deployment_cells(node,{})[1].plain.splitlines()[:2],['0.0.0.0·中继','[::]·中继'])
                 area.ports=['80','444','8443']
                 # Align by terminal cells, including Chinese names and error markers.
                 from rich.cells import cell_len
@@ -41,7 +41,7 @@ class OverviewTests(unittest.IsolatedAsyncioTestCase):
                 old_names=(first.name,last.name)
                 first.name='首页';last.name='Dashboard'
                 lines=ui.deployment_cells(node,{('sites',first.id,'source'):['error']})[1].plain.splitlines()[2:]
-                self.assertEqual([cell_len(line.split('TLS(')[0]) for line in lines],[13,13])
+                self.assertEqual([cell_len(line.split('TLS')[0]) for line in lines],[13,13])
                 self.assertTrue(lines[0].startswith('  首页'))
                 self.assertTrue(lines[0].endswith(' !'))
                 first.name,last.name=old_names

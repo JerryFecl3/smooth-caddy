@@ -22,6 +22,7 @@ EN = {'个人网络 Caddy 配置与证书管理': 'Caddy configuration and certi
  '监听 IP': 'Listen IP',
  'TLS 来源': 'TLS source',
  '（未启用）': ' (disabled)',
+ 'HTTP 端口仅用于 HTTPS 跳转。': 'The HTTP port is only used to redirect to HTTPS.',
  '覆盖 {0} 端口（默认 {1}）': 'Override {0} port (default: {1})',
  'Client 状态': 'Client status',
  '有效期至 2099-12-31。': 'Valid until 2099-12-31.',

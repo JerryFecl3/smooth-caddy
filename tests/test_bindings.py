@@ -117,7 +117,7 @@ class BindingUITests(unittest.IsolatedAsyncioTestCase):
                 editor.load_text('::1\n2001:db8::1\n::1')
                 await pilot.press('ctrl+s'); await pilot.pause()
                 self.assertEqual(app.snapshot().nodes[0].areas[b].ips, ['::1', '2001:db8::1'])
-                self.assertEqual(ui.cell_value(ui.demo.nodes[0], 'area:'+b), '[::1]\n[2001:db8::1]')
+                self.assertEqual(ui.cell_value(ui.demo.nodes[0], 'area:'+b), '[::1]·中继\n[2001:db8::1]·中继')
                 self.assertEqual(table.rows[table.ordered_rows[0].key].height, 2)
                 self.assertEqual(ui.cell_value(ui.demo.nodes[0], 'ssh_hops'), '192.0.2.2\n(经1个地址跳转)')
                 # Region editing now controls policy defaults only.
@@ -142,7 +142,7 @@ class BindingUITests(unittest.IsolatedAsyncioTestCase):
                 await pilot.press('f3');await pilot.pause()
                 self.assertNotIn('http_port',ui.col_keys)
                 self.assertEqual(ui.cell_value(ui.demo.nodes[0],'upstream_url'),'直连')
-                self.assertEqual(ui.cell_value(ui.demo.nodes[0],'area:'+a),'192.168.10.1')
+                self.assertEqual(ui.cell_value(ui.demo.nodes[0],'area:'+a),'192.168.10.1·中继')
                 table=ui.query_one('#matrix');table.move_cursor(row=0,column=ui.col_keys.index('area:'+a));table.focus()
                 await pilot.press('enter');await pilot.pause()
                 for i in range(2):
@@ -152,8 +152,8 @@ class BindingUITests(unittest.IsolatedAsyncioTestCase):
                 ui.screen.query_one('#port0').value='81'
                 await pilot.press('ctrl+s');await pilot.pause()
                 self.assertEqual(app.snapshot().nodes[0].areas[a].ports[0],'81')
-                self.assertEqual(ui.cell_value(ui.demo.nodes[0],'area:'+a),'192.168.10.1:(81/443/8443)')
-                self.assertEqual(ui.cell_value(ui.demo.nodes[0],'area:'+b),'[::]')
+                self.assertEqual(ui.cell_value(ui.demo.nodes[0],'area:'+a),'192.168.10.1:(81/443)·中继')
+                self.assertEqual(ui.cell_value(ui.demo.nodes[0],'area:'+b),'[::]·中继')
                 table.move_cursor(row=0,column=ui.col_keys.index('area:'+b));table.focus()
                 await pilot.press('enter');await pilot.pause()
                 self.assertFalse(ui.screen.query_one('#override0').value)
@@ -162,8 +162,8 @@ class BindingUITests(unittest.IsolatedAsyncioTestCase):
                 ui.screen.query_one('#port2').value='9443'
                 await pilot.press('ctrl+s');await pilot.pause()
                 self.assertEqual(app.snapshot().nodes[0].areas[a].ports[0],'81')
-                self.assertEqual(ui.cell_value(ui.demo.nodes[0],'area:'+a),'192.168.10.1:(81/443/8443)')
-                self.assertEqual(ui.cell_value(ui.demo.nodes[0],'area:'+b),'[::]:(80/443/9443)')
+                self.assertEqual(ui.cell_value(ui.demo.nodes[0],'area:'+a),'192.168.10.1:(81/443)·中继')
+                self.assertEqual(ui.cell_value(ui.demo.nodes[0],'area:'+b),'[::]·中继')
 
     async def test_two_line_node_summary(self):
         with tempfile.TemporaryDirectory() as directory,closing(Application(directory)) as app:

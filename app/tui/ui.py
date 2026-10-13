@@ -419,9 +419,9 @@ class Terminal(App, inherit_bindings=False):
     def service_label(self, site, region, inheritance=False):
         policy=service_policy(site,region)
         if not policy.enabled:return label('disabled')
-        source=tr('私有CA') if policy.tls_source=='private_ca' else tr('公共CA')
+        tls='TLS' if policy.tls_source=='private_ca' else 'TLS('+tr('公共CA')+')'
         pending=self.demo.validation.pending.get(site.id) if self.demo.validation and policy.tls_source=='public_ca' else None
-        return 'TLS('+source+')'+('·mTLS' if policy.mtls else '')+(' / '+pending if pending else '')
+        return tls+('·mTLS' if policy.mtls else '')+(' / '+pending if pending else '')
 
     def cell_value(self, obj, key):
         if key == 'tls_source':return label(obj.tls_source)
@@ -448,9 +448,9 @@ class Terminal(App, inherit_bindings=False):
                 return tr('未启用')
             ports = a.ports
             hosts = [f'[{ip}]' if ':' in ip else ip for ip in (a.ips or [tr('未填写 IP')])]
-            custom=ports[:2]!=['80','443'] or (a.relay_enabled and ports[2]!='8443')
-            shown=ports[:2]+[ports[2] if a.relay_enabled else '-']
-            suffix=':('+ '/'.join(shown)+')' if custom else ''
+            custom=ports[:2]!=['80','443']
+            suffix=':('+ '/'.join(ports[:2])+')' if custom else ''
+            if a.relay_enabled:suffix+='·'+tr('中继')
             return '\n'.join(host+suffix for host in hosts)
         return str(getattr(obj, key)) or tr('未填写')
 

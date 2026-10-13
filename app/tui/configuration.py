@@ -45,7 +45,7 @@ def edit_configuration(self):
                                Field(f'port{i}',title+tr(' 端口'),value)])
             fields.extend([Field('relay_enabled',tr('启用中继服务'),a.relay_enabled,boolean=True),
                            Field('port2',tr('中继端口'),a.ports[2])])
-            note = tr('每行一个 IP，共用下面的一组端口。0.0.0.0 监听全部 IPv4，:: 监听全部 IPv6。')
+            note = tr('每行一个 IP，共用下面的一组端口。0.0.0.0 监听全部 IPv4，:: 监听全部 IPv6。') + '\n' + tr('HTTP 端口仅用于 HTTPS 跳转。')
             def candidate(v):
                 addresses = binding_addresses(v['ips'].splitlines()) if v['enabled'] else [ip.strip() for ip in v['ips'].splitlines() if ip.strip()]
                 return Listen(v['enabled'], addresses,

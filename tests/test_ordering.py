@@ -28,8 +28,11 @@ class OrderingTests(unittest.IsolatedAsyncioTestCase):
                         await pilot.press('f7')  # First row stays in place.
                         await pilot.press('f8')
                         await pilot.pause()
+                        if page == 'public_tls':
+                            ui.public_tls_page.refresh_records()
+                            await pilot.pause()
                         self.assertEqual(table.cursor_row, 1)
-                        self.assertEqual(table.cursor_column, 1)
+                        self.assertEqual(table.cursor_column, 1, page)
                         ids = [item['id'] for item in ui.public_tls_page.records] if page == 'public_tls' else ui.row_ids
                         self.assertEqual(ids, expected[page][::-1])
                         await pilot.press('f8')  # Last row stays in place.

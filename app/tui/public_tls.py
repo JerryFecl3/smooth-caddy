@@ -22,7 +22,7 @@ class PublicTLSPage:
     def refresh_records(self, *, refresh_validation=True):
         if self.app.page!='public_tls':return
         if refresh_validation:self.app.demo.refresh_validation()
-        table=self.app.query_one('#matrix',DataTable);row=table.cursor_row
+        table=self.app.query_one('#matrix',DataTable);row,column=table.cursor_coordinate
         table.clear(columns=True)
         domain_width=32
         for label,width in ((tr('域名'),domain_width),(tr('通配'),8),(tr('状态'),12),(tr('有效期至'),14),(tr('环境'),6)):
@@ -32,7 +32,7 @@ class PublicTLSPage:
         self.app.refresh_navigation_labels()
         mode=tr('测试') if self.service.settings()['staging'] else tr('正式')
         for item in self.records:table.add_row(item['domain'],tr('是') if item['wildcard'] else tr('否'),self.service.state(item),item['expires'][:10] or '—',mode,key=item['id'])
-        table.move_cursor(row=min(row,max(0,len(self.records)-1)))
+        table.move_cursor(row=min(row,max(0,len(self.records)-1)),column=column)
         for name in ('pub-details','delete','pub-all'):self.app.query_one('#'+name).disabled=not self.records
         self.app.call_after_refresh(self.app.refresh_button_focus)
 

@@ -103,6 +103,12 @@ async def check():
         try:
             ui = Terminal(app)
             async with ui.run_test(size=(140, 40)) as pilot:
+                # Startup pushes the dialog after a refresh. A single pause can
+                # return after it enters the stack but before its children mount.
+                async def wait_for_initialization():
+                    while not (isinstance(ui.screen, InitializationDialog) and ui.screen.is_mounted):
+                        await asyncio.sleep(0.01)
+                await asyncio.wait_for(wait_for_initialization(), timeout=10)
                 await pilot.pause()
                 assert isinstance(ui.screen, InitializationDialog)
                 assert ui.screen.caption == 'Initialize', ui.screen.caption
