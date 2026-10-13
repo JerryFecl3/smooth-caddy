@@ -21,3 +21,16 @@ class VersionTests(unittest.TestCase):
             (root/'source').write_text('changed')
             with self.assertRaises(ValueError):git_release(root)
             with self.assertRaises(ValueError):git_preview(root)
+
+    def test_build_explicit_tag_overrides_main_branch_environment(self):
+        import os
+        from unittest.mock import patch
+        from tools.build_release import main
+        with patch.dict(os.environ, {'GITHUB_REF_NAME': 'main'}), \
+             patch('sys.argv', ['build_release.py', '--tag', 'v0.6.3']), \
+             patch('platform.system', return_value='Linux'), \
+             patch('platform.machine', return_value='x86_64'), \
+             patch('app.version.git_release', side_effect=RuntimeError('identity reached')) as identity:
+            with self.assertRaisesRegex(RuntimeError, 'identity reached'):
+                main()
+            self.assertEqual(identity.call_args.args[1], 'v0.6.3')

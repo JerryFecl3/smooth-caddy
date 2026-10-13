@@ -19,7 +19,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--preview", action="store_true", help="Build a clean commit without a release tag")
+    identity = parser.add_mutually_exclusive_group()
+    identity.add_argument("--preview", action="store_true", help="Build a clean commit without a release tag")
+    identity.add_argument("--tag", help="Explicit release tag for main-branch CI builds")
     args = parser.parse_args()
     system = {'Linux': 'linux', 'Windows': 'windows'}.get(platform.system())
     arch = {'x86_64': 'amd64', 'AMD64': 'amd64', 'aarch64': 'arm64', 'ARM64': 'arm64'}.get(platform.machine())
@@ -27,7 +29,7 @@ def main():
         raise SystemExit('Unsupported build platform')
     sys.path.insert(0,str(ROOT))
     from app.version import git_release, git_preview
-    release=git_preview(ROOT) if args.preview else git_release(ROOT,os.environ.get('GITHUB_REF_NAME'))
+    release=git_preview(ROOT) if args.preview else git_release(ROOT,args.tag or os.environ.get('GITHUB_REF_NAME'))
     version=release['version']
     name = f'smooth-caddy-{version}-{system}-{arch}'
     work = ROOT / 'build' / 'portable'
