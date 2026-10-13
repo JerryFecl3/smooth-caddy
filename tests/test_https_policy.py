@@ -13,7 +13,7 @@ from tests.legacy_batches import legacy_configuration
 class HTTPSPolicyTests(unittest.TestCase):
     def config(self):
         regions=[Region('a'*32,'Private'),Region('b'*32,'Public','public_ca',True)]
-        node=Node('c'*32,'Node',areas={r.id:Listen(True,['127.0.0.'+str(i+1)]) for i,r in enumerate(regions)},platform='debian_13',arch='amd64',ssh_hops=[['127.0.0.1']])
+        node=Node('c'*32,'Node',areas={r.id:Listen(True,['127.0.0.'+str(i+1)],relay_enabled=True) for i,r in enumerate(regions)},platform='debian_13',arch='amd64',ssh_hops=[['127.0.0.1']])
         site=Site('d'*32,'Web','example.test','http://127.0.0.1:9000',{r.id:Service(True) for r in regions})
         return Configuration(regions,[node],[site])
 
@@ -41,7 +41,7 @@ class HTTPSPolicyTests(unittest.TestCase):
                 tags.append(policy['certificate_selection']['any_tag'][0])
                 self.assertEqual('client_authentication' in policy,r.mtls)
             self.assertNotEqual(*tags)
-            node.areas[cfg.regions[1].id]=Listen(True,['127.0.0.1'],['80','9443','9444'])
+            node.areas[cfg.regions[1].id]=Listen(True,['127.0.0.1'],['80','9443','9444'],relay_enabled=True)
             self.assertIn('HTTP 跳转目标不唯一',str(configuration_errors(cfg)))
             site.areas[cfg.regions[1].id].enabled=False
             self.assertFalse(configuration_errors(cfg))
@@ -64,7 +64,7 @@ class HTTPSPolicyTests(unittest.TestCase):
                 self.assertEqual(site.areas[cfg.regions[0].id],Service(True,'private_ca',False))
                 self.assertEqual(current.nodes[0].areas[cfg.regions[0].id].ports[0],'8080')
                 self.assertEqual(current.nodes[0].areas[cfg.regions[0].id].ports,['8080','9443','9444'])
-                self.assertEqual(app.store.db.execute('PRAGMA user_version').fetchone()[0],10)
+                self.assertEqual(app.store.db.execute('PRAGMA user_version').fetchone()[0],11)
                 self.assertEqual(len(list(app.store.directory.glob('backups/smooth-caddy-v7-*.db'))),1)
         from app.network.migrations import configuration_v7
         old['nodes'][0]['areas'][cfg.regions[1].id]['overrides'][0]='8081'
@@ -94,10 +94,11 @@ class HTTPSPolicyTests(unittest.TestCase):
     def test_v8_migration_and_format2_json_copy_shared_port(self):
         cfg=self.config();value=cfg.to_dict()
         value['verify_origin_https']=False
-        for site in value['sites']:site.pop('verify_origin_https')
+        for site in value['sites']:site.pop('verify_origin_https');site.pop('homepage_redirect');site.pop('allowed_paths')
         for node in value['nodes']:
             node['http_port']='8080'
-            for area in node['areas'].values():area['ports']=area['ports'][1:]
+            for area in node['areas'].values():
+                area['ports']=area['ports'][1:];area.pop('relay_enabled')
         with tempfile.TemporaryDirectory() as directory:
             with closing(Application(directory)) as app:
                 app.store.db.execute('UPDATE configuration SET payload=?',(json.dumps(value),))
@@ -114,7 +115,7 @@ class HTTPSPolicyTests(unittest.TestCase):
     def test_distinct_http_ports_allow_distinct_https_targets_on_same_ip(self):
         from app.network.models import http_bindings
         cfg=self.config();node=cfg.nodes[0]
-        node.areas[cfg.regions[1].id]=Listen(True,['127.0.0.1'],['81','9443','9444'])
+        node.areas[cfg.regions[1].id]=Listen(True,['127.0.0.1'],['81','9443','9444'],relay_enabled=True)
         self.assertFalse(configuration_errors(cfg))
         groups=http_bindings(cfg,node)
         self.assertEqual([port for _,port,_ in groups],['80','81'])

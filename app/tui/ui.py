@@ -448,7 +448,9 @@ class Terminal(App, inherit_bindings=False):
                 return tr('未启用')
             ports = a.ports
             hosts = [f'[{ip}]' if ':' in ip else ip for ip in (a.ips or [tr('未填写 IP')])]
-            suffix=':('+ '/'.join(ports)+')' if ports!=['80','443','8443'] else ''
+            custom=ports[:2]!=['80','443'] or (a.relay_enabled and ports[2]!='8443')
+            shown=ports[:2]+[ports[2] if a.relay_enabled else '-']
+            suffix=':('+ '/'.join(shown)+')' if custom else ''
             return '\n'.join(host+suffix for host in hosts)
         return str(getattr(obj, key)) or tr('未填写')
 

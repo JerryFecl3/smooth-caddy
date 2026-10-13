@@ -44,8 +44,14 @@ class Form(ModalScreen):
 
     def compose_fields(self):
         for f in self.fields:
-            if f.key.startswith('port') and any(x.key=='override'+f.key[4:] for x in self.fields):continue
-            if f.key.startswith('override'):
+            if f.key=='port2' and any(x.key=='relay_enabled' for x in self.fields):continue
+            if f.key=='relay_enabled':
+                port=next(x for x in self.fields if x.key=='port2')
+                with Horizontal(classes='port-row'):
+                    yield Checkbox(f.label,bool(f.value),id=f.key)
+                    yield Input(str(port.value),id=port.key,placeholder='8443')
+            elif f.key.startswith('port') and any(x.key=='override'+f.key[4:] for x in self.fields):continue
+            elif f.key.startswith('override'):
                 port=next(x for x in self.fields if x.key=='port'+f.key[8:])
                 with Horizontal(classes='port-row'):
                     yield Checkbox(f.label,bool(f.value),id=f.key)
@@ -88,6 +94,9 @@ class Form(ModalScreen):
         for field in self.fields:
             if field.key.startswith('override'):
                 self.query_one('#port'+field.key[8:]).disabled=not enabled or not self.query_one('#'+field.key,Checkbox).value
+
+        if any(f.key=='relay_enabled' for f in self.fields):
+            self.query_one('#port2').disabled=not enabled or not self.query_one('#relay_enabled',Checkbox).value
 
     @on(Checkbox.Changed)
     @on(Select.Changed)

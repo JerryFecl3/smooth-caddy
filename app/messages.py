@@ -641,3 +641,15 @@ EN.update({'SSH 地址':'SSH address','上游':'Upstream','其它节点':'Other 
 EN.update({'中继':'Relay','选择中继时，地址必须指向已存在的中继服务及其 HTTPS 端口。请避免转发环路。':'For relay mode, enter an existing relay service address and HTTPS port. Avoid forwarding loops.'})
 
 EN.update({'未启用':'Not enabled'})
+
+EN.update({
+ '首页跳转路径': 'Homepage redirect path',
+ '允许访问路径': 'Allowed paths',
+ '路径配置格式无效': 'Invalid path configuration format',
+ '首页跳转须为本站非根路径，如 /ui/，不含查询参数': 'Use a local non-root redirect path, e.g. /ui/, without a query string',
+ '允许访问路径须为目录路径，每行一条，如 /s/，不支持通配符或查询参数': 'Enter one directory path per line, e.g. /s/, without wildcards or query strings',
+ '首页跳转目标必须在允许访问路径内': 'The homepage redirect target must be within an allowed path',
+ '首页跳转仅作用于 /；允许路径每行一条，留空不限制。不匹配返回 404。': 'Redirect applies only to /. Enter allowed paths one per line; leave blank for unrestricted access. Other paths return 404.',
+})
+
+EN.update({'启用中继服务':'Enable relay service','中继端口':'Relay port'})

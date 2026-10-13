@@ -26,6 +26,7 @@ class Listen:
     enabled: bool = False
     ips: list[str] = field(default_factory=list)
     ports: list[str] = field(default_factory=lambda: ['80', '443', '8443'])
+    relay_enabled: bool = False
 
 @dataclass
 class Node:
@@ -51,6 +52,8 @@ class Site:
     source: str = ''
     areas: dict[str, Service] = field(default_factory=dict)
     verify_origin_https: bool = False
+    homepage_redirect: str = ''
+    allowed_paths: list[str] = field(default_factory=list)
 
 @dataclass
 class Configuration:
@@ -68,14 +71,14 @@ class Configuration:
         required = {'regions', 'nodes', 'sites', 'revision'}
         if set(value) != required:
             raise ValueError(tr('配置格式不受支持'))
-        if any('verify_origin_https' not in site for site in value['sites']):
+        if any(not {'verify_origin_https','homepage_redirect','allowed_paths'}.issubset(site) for site in value['sites']):
             raise ValueError(tr('配置格式不受支持'))
         nodes = []
         for original in value['nodes']:
             n = dict(original)
             if 'ssh_hops' not in n or 'upstream_url' not in n or any(key in n for key in ('ssh_ip', 'mode', 'upstream')):
                 raise ValueError(tr('配置格式不受支持'))
-            if any('ip' in v or 'ips' not in v for v in n['areas'].values()):
+            if any('ip' in v or 'ips' not in v or 'relay_enabled' not in v for v in n['areas'].values()):
                 raise ValueError(tr('配置格式不受支持'))
             n['areas'] = {k: Listen(**v) for k, v in n['areas'].items()}
             nodes.append(Node(**n))
@@ -94,7 +97,7 @@ def validate_enum_values(config):
             raise ValueError(tr('区域服务原则无效'))
     for node in config.nodes:
         for area in node.areas.values():
-            if type(area.enabled) is not bool or not isinstance(area.ips,list) or any(not isinstance(ip,str) for ip in area.ips):
+            if type(area.enabled) is not bool or type(area.relay_enabled) is not bool or not isinstance(area.ips,list) or any(not isinstance(ip,str) for ip in area.ips):
                 raise ValueError(tr('绑定地址必须为 IP 列表'))
             if not isinstance(area.ports,list) or len(area.ports)!=3 or any(not isinstance(p,str) for p in area.ports):
                 raise ValueError(tr('端口配置数量无效'))
@@ -103,11 +106,26 @@ def validate_enum_values(config):
         if not isinstance(node.upstream_url,str) or node.platform not in ('',*PLATFORMS):
             raise ValueError(tr('节点配置标识不受支持'))
     for site in config.sites:
+        if not isinstance(site.homepage_redirect,str) or not isinstance(site.allowed_paths,list) or any(not isinstance(p,str) for p in site.allowed_paths):
+            raise ValueError(tr('路径配置格式无效'))
         if type(site.verify_origin_https) is not bool:
             raise ValueError(tr('源头 HTTPS 校验设置必须为布尔值'))
         for service in site.areas.values():
             if not isinstance(service,Service) or type(service.enabled) is not bool or service.tls_source not in (None,*TLS_SOURCES) or (service.mtls is not None and type(service.mtls) is not bool):
                 raise ValueError(tr('站点配置标识不受支持'))
+
+
+def validate_site_paths(redirect, paths):
+    def valid(path):
+        return (path.startswith('/') and not path.startswith('//') and '//' not in path
+                and not any(c.isspace() or ord(c)<32 or ord(c)==127 or c in "\\?#%*[]{}" for c in path)
+                and not any(part in ('.','..') for part in path.split('/')))
+    if redirect and (not valid(redirect) or redirect=='/'):
+        raise ValueError(tr('首页跳转须为本站非根路径，如 /ui/，不含查询参数'))
+    if any(not valid(path) for path in paths):
+        raise ValueError(tr('允许访问路径须为目录路径，每行一条，如 /s/，不支持通配符或查询参数'))
+    if redirect and paths and not any(path=='/' or redirect==path.rstrip('/') or redirect.startswith(path.rstrip('/')+'/') for path in paths):
+        raise ValueError(tr('首页跳转目标必须在允许访问路径内'))
 
 
 def service_policy(site, region):
@@ -189,6 +207,7 @@ def configuration_errors(config):
                 add('nodes', node, col, tr('端口配置数量无效')); continue
             if not valid_port(area.ports[0]):add('nodes',node,col,tr('HTTP 跳转端口无效'))
             for i, port in enumerate(area.ports[1:]):
+                if i==1 and not area.relay_enabled:continue
                 if not valid_port(port): add('nodes', node, col, PORTS[i] + tr(' 端口无效')); continue
                 for address in addresses:
                     for other, other_port, other_region, other_kind in used:
@@ -210,6 +229,8 @@ def configuration_errors(config):
                 raise ValueError()
             if url.port is not None and not 1 <= url.port <= 65535: raise ValueError()
         except ValueError: add('sites', site, 'source', tr('源头须为 http/https 地址，可带端口，不带路径或凭据'))
+        try: validate_site_paths(site.homepage_redirect,site.allowed_paths)
+        except ValueError as e: add('sites',site,'source',str(e))
         for rid, mode in site.areas.items():
             if rid not in region_ids: add('sites', site, 'area:' + rid, tr('区域服务原则无效'))
     for node in config.nodes:
@@ -222,7 +243,7 @@ def configuration_errors(config):
             try:hosts=[ip_address(ip) for ip in binding_addresses(area.ips)]
             except ValueError:continue
             for other_id,other in node.areas.items():
-                if not other.enabled or not any(valid_port(p) and int(p)==int(area.ports[0]) for p in other.ports[1:]):continue
+                if not other.enabled or not any(valid_port(p) and int(p)==int(area.ports[0]) for p in other.ports[1:(3 if other.relay_enabled else 2)]):continue
                 try:others=[ip_address(ip) for ip in binding_addresses(other.ips)]
                 except ValueError:continue
                 if any(a.version==b.version and (a==b or a.is_unspecified or b.is_unspecified) for a in hosts for b in others):

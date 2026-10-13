@@ -16,7 +16,7 @@ class OverviewTests(unittest.IsolatedAsyncioTestCase):
             cfg=app.snapshot()
             for node in cfg.nodes:
                 node.platform='debian_13';node.arch='amd64';node.ssh_hops=[['192.0.2.1'],['2001:db8::2']]
-                node.areas={cfg.regions[0].id:Listen(True,['0.0.0.0','::'],['80','444','8443'])}
+                node.areas={cfg.regions[0].id:Listen(True,['0.0.0.0','::'],['80','444','8443'],relay_enabled=True)}
             for i,site in enumerate(cfg.sites):
                 site.domain=f's{i}.example.com';site.source='http://127.0.0.1:8000'
                 site.areas={cfg.regions[0].id:Service(i!=1)}

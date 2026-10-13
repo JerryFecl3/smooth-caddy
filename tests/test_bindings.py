@@ -30,7 +30,7 @@ class BindingTests(unittest.TestCase):
                                         ('0.0.0.0', '::', False), ('192.0.2.1', '192.0.2.2', False),
                                         ('2001:db8::1', '2001:db8:0:0::1', True)]:
             with self.subTest(first=first, second=second):
-                node.areas = {'a': Listen(True, [first]), 'b': Listen(True, [second],['80','9443','443'])}
+                node.areas = {'a': Listen(True, [first],relay_enabled=True), 'b': Listen(True, [second],['80','9443','443'],relay_enabled=True)}
                 errors = configuration_errors(config)
                 self.assertEqual(bool(errors), conflict)
                 if conflict:
@@ -39,9 +39,9 @@ class BindingTests(unittest.TestCase):
                     self.assertIn('内网 HTTPS', a[0]); self.assertIn('外网 中继 HTTPS', a[0])
                 node.areas['b'].enabled = False
                 self.assertEqual(configuration_errors(config), {})
-        node.areas = {'a': Listen(True, ['0.0.0.0', '192.0.2.1'])}
+        node.areas = {'a': Listen(True, ['0.0.0.0', '192.0.2.1'],relay_enabled=True)}
         self.assertIn(('nodes', 'n', 'area:a'), configuration_errors(config))
-        node.areas = {'a': Listen(True, ['::', '0.0.0.0'])}
+        node.areas = {'a': Listen(True, ['::', '0.0.0.0'],relay_enabled=True)}
         self.assertFalse(configuration_errors(config))
         node.areas['a'].ports[0] = '443'
         self.assertIn('HTTP', configuration_errors(config)[('nodes', 'n', 'area:a')][0])
@@ -53,7 +53,7 @@ class BindingTests(unittest.TestCase):
             app.create('sites', 'Web')
             cfg = app.snapshot(); node = cfg.nodes[0]
             node.platform = 'debian_13'; node.arch = 'amd64'; node.ssh_hops = [['192.0.2.1']]
-            node.areas[rid] = Listen(True, ['0.0.0.0', '::'])
+            node.areas[rid] = Listen(True, ['0.0.0.0', '::'],relay_enabled=True)
             cfg.sites[0].domain = 'test.example'; cfg.sites[0].source = 'http://127.0.0.1:9000'; cfg.sites[0].areas[rid] = Service(True)
             materials = generate(cfg, app.certificates, 'test')[nid]
             servers = json.loads(materials['caddy.json'])['apps']['http']['servers']
@@ -85,7 +85,7 @@ class BindingTests(unittest.TestCase):
             app.store.db.execute('PRAGMA user_version=5')
             with closing(Application(directory)) as upgraded:
                 self.assertEqual(upgraded.snapshot().nodes[0].areas[rid].ips, ['192.0.2.1'])
-                self.assertEqual(upgraded.store.db.execute('PRAGMA user_version').fetchone()[0], 10)
+                self.assertEqual(upgraded.store.db.execute('PRAGMA user_version').fetchone()[0], 11)
             backups = list((Path(directory)/'backups').glob('smooth-caddy-v5-*.db'))
             self.assertEqual(len(backups), 1)
             with closing(sqlite3.connect(backups[0])) as db:
@@ -99,7 +99,7 @@ class BindingUITests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as directory, closing(Application(directory)) as app:
             app.security.setup('test')
             a = app.create('regions', '内网'); b = app.create('regions', '外网'); nid = app.create('nodes', 'Node')
-            cfg = app.snapshot(); cfg.nodes[0].ssh_hops = [['192.0.2.1'], ['192.0.2.2']]; cfg.nodes[0].areas = {a: Listen(True, ['0.0.0.0']), b: Listen(True, ['::'])}
+            cfg = app.snapshot(); cfg.nodes[0].ssh_hops = [['192.0.2.1'], ['192.0.2.2']]; cfg.nodes[0].areas = {a: Listen(True, ['0.0.0.0'],relay_enabled=True), b: Listen(True, ['::'],relay_enabled=True)}
             app.save_configuration(cfg)
             ui = ReadyTerminal(app)
             async with ui.run_test(size=(130, 40)) as pilot:
@@ -135,7 +135,7 @@ class BindingUITests(unittest.IsolatedAsyncioTestCase):
             a=app.create('regions','A');b=app.create('regions','B');app.create('nodes','Node')
             cfg=app.snapshot();node=cfg.nodes[0]
             node.platform='debian_13';node.arch='amd64';node.ssh_hops=[['192.0.2.1']]
-            node.areas={a:Listen(True,['192.168.10.1']),b:Listen(True,['::'])}
+            node.areas={a:Listen(True,['192.168.10.1'],relay_enabled=True),b:Listen(True,['::'],relay_enabled=True)}
             app.save_configuration(cfg)
             ui=ReadyTerminal(app)
             async with ui.run_test(size=(140,40)) as pilot:
@@ -145,7 +145,7 @@ class BindingUITests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(ui.cell_value(ui.demo.nodes[0],'area:'+a),'192.168.10.1')
                 table=ui.query_one('#matrix');table.move_cursor(row=0,column=ui.col_keys.index('area:'+a));table.focus()
                 await pilot.press('enter');await pilot.pause()
-                for i in range(3):
+                for i in range(2):
                     self.assertFalse(ui.screen.query_one('#override'+str(i)).value)
                     self.assertTrue(ui.screen.query_one('#port'+str(i)).disabled)
                 ui.screen.query_one('#override0').value=True;await pilot.pause()
@@ -158,7 +158,7 @@ class BindingUITests(unittest.IsolatedAsyncioTestCase):
                 await pilot.press('enter');await pilot.pause()
                 self.assertFalse(ui.screen.query_one('#override0').value)
                 ui.screen.query_one('#override0').value=False
-                ui.screen.query_one('#override2').value=True;await pilot.pause()
+                ui.screen.query_one('#relay_enabled').value=True;await pilot.pause()
                 ui.screen.query_one('#port2').value='9443'
                 await pilot.press('ctrl+s');await pilot.pause()
                 self.assertEqual(app.snapshot().nodes[0].areas[a].ports[0],'81')

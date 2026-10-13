@@ -8,7 +8,7 @@ import sqlite3
 from uuid import uuid4
 from .models import Configuration
 
-DATABASE_VERSION = 10
+DATABASE_VERSION = 11
 
 
 def legacy_configuration(value):
@@ -133,6 +133,16 @@ def configuration_v9(value):
     for site in value['sites']:
         if 'verify_origin_https' in site:raise ValueError(tr('配置格式不受支持'))
         site['verify_origin_https']=verify
+    return configuration_v10(value)
+
+
+def configuration_v10(value):
+    value=deepcopy(value)
+    for site in value['sites']:
+        site.setdefault('homepage_redirect', '')
+        site.setdefault('allowed_paths', [])
+    for node in value['nodes']:
+        for area in node['areas'].values():area.setdefault('relay_enabled',True)
     return Configuration.from_dict(value)
 
 
@@ -142,7 +152,7 @@ def migrate_database(db, path, version):
     if row is None:
         raise ValueError(tr('旧数据库缺少配置记录'))
     revision, payload = row
-    config = {2: legacy_configuration, 3: configuration_v3, 4: configuration_v4, 5: configuration_v5, 6: configuration_v7, 7: configuration_v7, 8: configuration_v8, 9: configuration_v9}[version](json.loads(payload))
+    config = {2: legacy_configuration, 3: configuration_v3, 4: configuration_v4, 5: configuration_v5, 6: configuration_v7, 7: configuration_v7, 8: configuration_v8, 9: configuration_v9, 10: configuration_v10}[version](json.loads(payload))
     if config.revision != revision:
         raise ValueError(tr('旧数据库配置修订号不一致'))
     directory = Path(path).parent / 'backups'

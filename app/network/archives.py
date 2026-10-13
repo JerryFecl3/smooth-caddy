@@ -8,7 +8,7 @@ from ..i18n import tr
 from .models import Configuration, validate_uniqueness
 from .files import publish
 
-FORMAT = 4
+FORMAT = 5
 MAX_BYTES = 10 * 1024 * 1024
 
 
@@ -23,7 +23,7 @@ def decode(document):
     """Validate structure, not deployment readiness. Never accept credential fields."""
     try:
         if set(document) != {'format', 'name', 'created_at', 'configuration'}: raise ValueError()
-        if type(document['format']) is not int or document['format'] not in (1, 2, 3, FORMAT): raise ValueError()
+        if type(document['format']) is not int or document['format'] not in (1, 2, 3, 4, FORMAT): raise ValueError()
         if not isinstance(document['name'], str) or not document['name'].strip(): raise ValueError()
         if not isinstance(document['created_at'], str): raise ValueError()
         datetime.fromisoformat(document['created_at'])
@@ -32,12 +32,12 @@ def decode(document):
         old=document['format']==1
         shapes = {'regions': {'id','name','ports'} if old else {'id','name','tls_source','mtls'},
                   'nodes': {'id','name','upstream_url','areas','platform','arch','ssh_hops'} | ({'http_port'} if document['format']==2 else set()),
-                  'sites': {'id','name','domain','source','areas'} | ({'tls_source'} if old else set()) | ({'verify_origin_https'} if document['format']==4 else set())}
+                  'sites': {'id','name','domain','source','areas'} | ({'tls_source'} if old else set()) | ({'verify_origin_https'} if document['format']>=4 else set()) | ({'homepage_redirect','allowed_paths'} if document['format']>=5 else set())}
         for group, keys in shapes.items():
             if not isinstance(value[group], list): raise ValueError()
             for item in value[group]:
                 if not isinstance(item, dict) or set(item) != keys: raise ValueError()
-                for key in keys - {'ports','areas','ssh_hops','mtls','verify_origin_https'}:
+                for key in keys - {'ports','areas','ssh_hops','mtls','verify_origin_https','allowed_paths'}:
                     if not isinstance(item[key], str): raise ValueError()
                 if group == 'regions' and old:
                     if not isinstance(item['ports'], list) or len(item['ports']) != 3 or any(not isinstance(p,str) for p in item['ports']): raise ValueError()
@@ -46,7 +46,7 @@ def decode(document):
                     for area in item['areas'].values():
                         if group=='nodes':
                             port_key='overrides' if old else 'ports'
-                            if not isinstance(area,dict) or set(area) != {'enabled','ips',port_key} or type(area['enabled']) is not bool:raise ValueError()
+                            if not isinstance(area,dict) or set(area) != ({'enabled','ips',port_key} | ({'relay_enabled'} if document['format']>=5 else set())) or type(area['enabled']) is not bool:raise ValueError()
                             if not isinstance(area[port_key],list) or len(area[port_key])!=(2 if document['format']==2 else 3) or any(not isinstance(p,str) and not (old and p is None) for p in area[port_key]):raise ValueError()
                         elif old:
                             if area not in ('disabled','http','https','https_mtls'):raise ValueError()
@@ -61,6 +61,9 @@ def decode(document):
         elif document['format']==3:
             from .migrations import configuration_v9
             config=configuration_v9(value)
+        elif document['format']==4:
+            from .migrations import configuration_v10
+            config=configuration_v10(value)
         else:config = Configuration.from_dict(value)
         validate_uniqueness(config)
         regions = {r.id for r in config.regions}

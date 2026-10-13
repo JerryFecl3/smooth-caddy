@@ -33,7 +33,7 @@ class RelayMigrationTests(unittest.TestCase):
             cfg=app.snapshot()
             for node in cfg.nodes:
                 node.platform='debian_13';node.arch='amd64';node.ssh_hops=[['192.0.2.1']]
-            cfg.nodes[0].areas[rid]=Listen(True,['2001:db8::1'],['80','443','9443'])
+            cfg.nodes[0].areas[rid]=Listen(True,['2001:db8::1'],['80','443','9443'],relay_enabled=True)
             cfg.nodes[1].upstream_url='https://[2001:db8::1]:9443'
             app.save_configuration(cfg)
             batch=legacy_batch(app);folder=app.releases.directory(batch)
@@ -61,7 +61,7 @@ class RelayMigrationTests(unittest.TestCase):
             app.store.db.execute('PRAGMA user_version=4')
             with closing(Application(directory)) as upgraded:
                 self.assertEqual(upgraded.snapshot().nodes[1].upstream_url,converted.nodes[1].upstream_url)
-                self.assertEqual(upgraded.store.db.execute('PRAGMA user_version').fetchone()[0],10)
+                self.assertEqual(upgraded.store.db.execute('PRAGMA user_version').fetchone()[0],11)
             backup=next((Path(directory)/'backups').glob('smooth-caddy-v4-*.db'))
             with closing(sqlite3.connect(backup)) as db:
                 self.assertEqual(json.loads(db.execute('SELECT payload FROM configuration').fetchone()[0]),original)
@@ -90,7 +90,7 @@ class CaddyRelayTests(unittest.TestCase):
             cfg=app.snapshot()
             for node in cfg.nodes:
                 node.platform='debian_13';node.arch='amd64';node.ssh_hops=[['127.0.0.1']]
-                node.areas[rid]=Listen(True,['127.0.0.1'],[port(),port(),port()])
+                node.areas[rid]=Listen(True,['127.0.0.1'],[port(),port(),port()],relay_enabled=True)
             cfg.nodes[0].areas[rid].ips=['0.0.0.0','::']
             relay_port=int(cfg.nodes[1].areas[rid].ports[2])
             cfg.nodes[0].upstream_url=f'https://127.0.0.1:{relay_port}'

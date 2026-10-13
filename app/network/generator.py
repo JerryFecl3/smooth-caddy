@@ -33,7 +33,7 @@ def generate(config, certificates, version, public_materials=None):
                 add_material(shared,name,certificates.leaf('tls','site-'+site.id,dns=domain),'tls')
     for node in config.nodes:
         for rid, area in node.areas.items():
-            if area.enabled:
+            if area.enabled and area.relay_enabled:
                 identity = f'relay-{node.id}-{rid}'
                 add_material(shared, identity, certificates.leaf('relay', 'relay-'+node.id, dns=RELAY_SERVER_NAME, ips=[ip for ip in binding_addresses(area.ips) if not ip_address(ip).is_unspecified]), 'relay')
         if node.upstream_url:
@@ -88,7 +88,20 @@ def generate(config, certificates, version, public_materials=None):
             for site in config.sites:
                 service=service_policy(site,region);domain=canonical_domain(site.domain)
                 if service.enabled:
-                    https.append(route(domain,proxy(site)))
+                    if site.homepage_redirect:
+                        redirect=route(domain,{'handler':'static_response','status_code':302,
+                                              'headers':{'Location':[site.homepage_redirect]}})
+                        redirect['match'][0]['path']=['/']
+                        https.append(redirect)
+                    entry=route(domain,proxy(site))
+                    if site.allowed_paths:
+                        patterns=[]
+                        for path in site.allowed_paths:
+                            patterns.extend(['/*'] if path=='/' else [path.rstrip('/'),path.rstrip('/')+'/*'])
+                        entry['match'][0]['path']=list(dict.fromkeys(patterns))
+                    https.append(entry)
+                    if site.allowed_paths:
+                        https.append(route(domain,{'handler':'static_response','status_code':404}))
                     policy=certificate('site-'+site.id+'-'+service.tls_source);policy['match']={'sni':[domain]}
                     if service.mtls:
                         policy['client_authentication']=auth('client-ca.pem',[n for n in shared if n.startswith('client-') and n!='client-ca.pem'])
@@ -97,13 +110,14 @@ def generate(config, certificates, version, public_materials=None):
                 entry = server('https',ports[0],https,policies)
                 # Detect plaintext before TLS; relay listeners must remain TLS-only.
                 entry['listener_wrappers'] = [{'wrapper':'http_redirect'}, {'wrapper':'tls'}]
-            identity=f'relay-{node.id}-{region.id}'
-            policy=certificate(identity)
-            policy['client_authentication']={'mode':'require_and_verify','ca':pool('relay-ca.pem')}
-            relay=server('relay',ports[1],[route(canonical_domain(s.domain),proxy(s)) for s in config.sites],[policy],strict=False)
-            # Authenticated relay peers may forward original request headers. Their TCP
-            # addresses can differ from listener addresses due to network routing/NAT.
-            relay['trusted_proxies']={'source':'static','ranges':['0.0.0.0/0','::/0']}
+            if area.relay_enabled:
+                identity=f'relay-{node.id}-{region.id}'
+                policy=certificate(identity)
+                policy['client_authentication']={'mode':'require_and_verify','ca':pool('relay-ca.pem')}
+                relay=server('relay',ports[1],[route(canonical_domain(s.domain),proxy(s)) for s in config.sites],[policy],strict=False)
+                # Authenticated relay peers may forward original request headers. Their TCP
+                # addresses can differ from listener addresses due to network routing/NAT.
+                relay['trusted_proxies']={'source':'static','ranges':['0.0.0.0/0','::/0']}
         for index,(host,http_port,targets) in enumerate(http_bindings(config,node)):
             redirects=[]
             for (local,domain),port in targets.items():

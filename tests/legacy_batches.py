@@ -29,11 +29,12 @@ def legacy_configuration(config):
     from app.network.models import service_policy
     value=config.to_dict()
     value['verify_origin_https']=value['sites'][0]['verify_origin_https'] if value['sites'] else False
-    for site in value['sites']:site.pop('verify_origin_https')
+    for site in value['sites']:
+        for key in ('verify_origin_https','homepage_redirect','allowed_paths'):site.pop(key)
     for region in value['regions']:
         region.pop('tls_source');region.pop('mtls');region['ports']=['80','443','8443']
     for node in value['nodes']:
-        for area in node['areas'].values():area['overrides']=area.pop('ports')
+        for area in node['areas'].values():area['overrides']=area.pop('ports');area.pop('relay_enabled')
     for site,obj in zip(value['sites'],config.sites):
         policies={r.id:service_policy(obj,r) for r in config.regions}
         site['tls_source']=next((p.tls_source for p in policies.values() if p.enabled),'private_ca')

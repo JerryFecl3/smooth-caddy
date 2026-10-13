@@ -40,14 +40,17 @@ def edit_configuration(self):
         else:
             a = deepcopy(obj.areas.get(r.id, Listen()))
             fields = [Field('enabled', tr('启用此区域'), a.enabled, boolean=True), Field('ips', tr('绑定地址'), '\n'.join(a.ips), multiline=True)]
-            for i,(title,default,value) in enumerate(zip(('HTTP',*PORTS),('80','443','8443'),a.ports)):
+            for i,(title,default,value) in enumerate(zip(('HTTP',PORTS[0]),('80','443'),a.ports[:2])):
                 fields.extend([Field(f'override{i}',tr('覆盖 {0} 端口（默认 {1}）',title,default),value!=default,boolean=True),
                                Field(f'port{i}',title+tr(' 端口'),value)])
+            fields.extend([Field('relay_enabled',tr('启用中继服务'),a.relay_enabled,boolean=True),
+                           Field('port2',tr('中继端口'),a.ports[2])])
             note = tr('每行一个 IP，共用下面的一组端口。0.0.0.0 监听全部 IPv4，:: 监听全部 IPv6。')
             def candidate(v):
                 addresses = binding_addresses(v['ips'].splitlines()) if v['enabled'] else [ip.strip() for ip in v['ips'].splitlines() if ip.strip()]
                 return Listen(v['enabled'], addresses,
-                              [v[f'port{i}'] if v[f'override{i}'] else default for i,default in ((0,'80'),(1,'443'),(2,'8443'))])
+                              [v[f'port{i}'] if v[f'override{i}'] else default for i,default in ((0,'80'),(1,'443'))]+[v['port2']],
+                              relay_enabled=v['relay_enabled'])
             def validator(v):
                 try: area = candidate(v)
                 except ValueError as error: return str(error)
@@ -59,7 +62,14 @@ def edit_configuration(self):
                 return '\n'.join(problems) or None
     elif page == 'sites' and key == 'source':
         fields=[Field('value',tr('源地址'),obj.source),
-                Field('verify',tr('校验 HTTPS 源证书'),obj.verify_origin_https,boolean=True)]
+                Field('verify',tr('校验 HTTPS 源证书'),obj.verify_origin_https,boolean=True),
+                Field('redirect',tr('首页跳转路径'),obj.homepage_redirect),
+                Field('paths',tr('允许访问路径'), '\n'.join(obj.allowed_paths),multiline=True)]
+        note=tr('首页跳转仅作用于 /；允许路径每行一条，留空不限制。不匹配返回 404。')
+        def validator(v):
+            from ..network.models import validate_site_paths
+            try: validate_site_paths(v['redirect'],[p.strip() for p in v['paths'].splitlines() if p.strip()])
+            except ValueError as error: return str(error)
     elif key == 'tls_source':
         fields = [Field('value', tr('TLS 来源'), obj.tls_source, labeled_options(('private_ca','public_ca')),radio=True)]
         note = tr('公共证书来自 TLS证书页面。')
@@ -90,6 +100,8 @@ def edit_configuration(self):
                 obj.areas[key[5:]] = Service(v['enabled'],v['tls_source'] if v['custom'] else None,v['mtls'] if v['custom'] else None)
         elif page == 'sites' and key == 'source':
             obj.source,obj.verify_origin_https=v['value'],v['verify']
+            obj.homepage_redirect=v['redirect']
+            obj.allowed_paths=list(dict.fromkeys(p.strip() for p in v['paths'].splitlines() if p.strip()))
         elif key == 'platform':
             obj.platform, obj.arch = v['platform'], v['arch']
         elif key == 'ssh_hops':

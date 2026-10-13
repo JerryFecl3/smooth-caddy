@@ -25,7 +25,7 @@ class ReleaseTests(unittest.TestCase):
         cfg=app.snapshot()
         for i,node in enumerate(cfg.nodes):
             node.platform='debian_13' if i==0 else 'openwrt_25_12'
-            node.arch='amd64';node.ssh_hops=[['127.0.0.'+str(i+2)]];node.areas[rid]=Listen(True,['127.0.0.'+str(i+2)])
+            node.arch='amd64';node.ssh_hops=[['127.0.0.'+str(i+2)]];node.areas[rid]=Listen(True,['127.0.0.'+str(i+2)],relay_enabled=True)
         cfg.nodes[1].upstream_url='https://127.0.0.2:8443'
         cfg.sites[0].domain='example.test';cfg.sites[0].source='http://127.0.0.1:9000';cfg.sites[0].areas[rid]=Service(True,mtls=True)
         cfg.nodes[1].ssh_hops=cfg.nodes[0].ssh_hops+cfg.nodes[1].ssh_hops
