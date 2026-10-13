@@ -38,3 +38,19 @@ class CompactFormTests(unittest.IsolatedAsyncioTestCase):
                 await pilot.pause()
                 self.assertTrue(form.query_one('#form-error').display)
                 self.assertTrue(ui.screen.region.contains_region(form.query_one('#save').region))
+
+    async def test_deferred_layout_callbacks_after_dialog_closes(self):
+        with tempfile.TemporaryDirectory() as directory, closing(Application(directory)) as app:
+            app.security.setup('test')
+            ui = ReadyTerminal(app)
+            async with ui.run_test() as pilot:
+                form = Form('Closing', [Field('name', 'Name', 'value')])
+                ui.push_screen(form)
+                await pilot.pause()
+                await pilot.press('escape')
+                await pilot.pause()
+                self.assertIsNot(ui.screen, form)
+                self.assertFalse(list(form.query('#form-fields')))
+                # Emulate refresh callbacks already queued before dismissal.
+                form.fit_fields()
+                form.reveal_field()

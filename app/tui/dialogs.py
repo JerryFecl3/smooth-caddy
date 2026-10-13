@@ -100,7 +100,7 @@ class Form(ModalScreen):
         self.call_after_refresh(self.fit_fields)
 
     def fit_fields(self):
-        if not self.is_mounted or isinstance(self, HelpGuide):
+        if not self.is_mounted or not self.is_current or isinstance(self, HelpGuide):
             return
         dialog = self.query_one('#dialog')
         fields = self.query_one('#form-fields')
@@ -114,6 +114,8 @@ class Form(ModalScreen):
         self.call_after_refresh(self.reveal_field)
 
     def reveal_field(self):
+        if not self.is_current:
+            return
         fields = self.query_one('#form-fields')
         if self.focused is not None and fields in self.focused.ancestors:
             fields.scroll_to_widget(self.focused, animate=False, immediate=True)
